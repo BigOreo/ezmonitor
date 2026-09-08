@@ -1,0 +1,19 @@
+{
+  "name": "ezmonitor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Teacher/student classroom LAN screen monitoring suite",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@ezmonitor/shared && npm run build --workspace=@ezmonitor/teacher && npm run build --workspace=@ezmonitor/student",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start:teacher": "npm run start --workspace=@ezmonitor/teacher",
+    "start:student": "npm run start --workspace=@ezmonitor/student"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

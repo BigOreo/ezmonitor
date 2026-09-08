@@ -1,0 +1,126 @@
+:root {
+  color-scheme: dark;
+  --bg: #14161a;
+  --panel: #1e2128;
+  --border: #2c3038;
+  --text: #e7e9ee;
+  --muted: #9aa2af;
+  --accent: #4f8cff;
+  --danger: #e2574c;
+  --ok: #33c17f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.session-info {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.session-info b {
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 24px;
+}
+
+.empty-state {
+  color: var(--muted);
+  grid-column: 1 / -1;
+}
+
+.student-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-card video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  object-fit: contain;
+}
+
+.student-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.student-card .name {
+  font-weight: 600;
+}
+
+.student-card .status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.student-card .status.viewing {
+  color: var(--ok);
+}
+
+.student-card .status.denied {
+  color: var(--danger);
+}
+
+.student-card .actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
