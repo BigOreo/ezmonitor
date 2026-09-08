@@ -103,6 +103,24 @@ block monitoring, defeating the point. The `apps/child` renderer
 the parent app whether streaming actually started (e.g. it fails if screen
 recording permission wasn't granted) — it is not a permission gate.
 
+### Resetting the family code
+
+If the family code is ever shared or leaked beyond the household, the
+parent app has a **Reset family code** button (top of its window) that
+generates and persists a brand new one:
+
+- Any child device connected at that moment is told it's been disconnected
+  and immediately kicked — the parent doesn't have to guess who's currently
+  online.
+- Any paired device that's offline right now (old code stored locally) is
+  rejected with a clear "please pair again" message the next time it tries
+  to reconnect — it won't spin forever silently retrying with an
+  invalidated code, and won't be able to find the parent via LAN discovery
+  either, since the parent only answers discovery requests carrying its
+  *current* code.
+- Re-pairing after a reset is the same one-time setup flow as the first
+  pairing.
+
 ## Repository layout
 
 ```
@@ -176,9 +194,6 @@ platform electron-builder supports.
   compiled output were run. **Please test the actual pairing, background
   reconnect, and live video flow on real Windows/Mac machines** before
   relying on this.
-- No way yet to reset/rotate the family code from the UI if it's ever
-  shared beyond the household — currently only fixable by deleting the
-  parent app's `family-code.json` from its user-data folder.
 - No reconnect notification/history — the parent app doesn't currently log
   when a child device went offline/came back, just its live state.
 - No support yet for viewing many child devices at once in a low-bandwidth

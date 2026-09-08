@@ -19,6 +19,8 @@ export interface StatusUpdate {
   parentName: string;
   isSharing: boolean;
   paired: boolean;
+  /** One-shot explanation for a state change, e.g. why this device was unpaired. */
+  message?: string;
 }
 
 const api = {

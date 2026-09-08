@@ -24,6 +24,9 @@ const api = {
   sendToChild: (childId: string, message: SignalingMessage) => {
     ipcRenderer.send("ezmonitor:send-to-child", childId, message);
   },
+
+  regenerateFamilyCode: (): Promise<{ familyCode: string; kicked: number }> =>
+    ipcRenderer.invoke("ezmonitor:regenerate-family-code"),
 };
 
 export type EzMonitorParentApi = typeof api;

@@ -6,18 +6,48 @@
 const grid = document.getElementById("child-grid");
 const emptyState = document.getElementById("empty-state");
 const sessionInfoEl = document.getElementById("session-info");
+const regenBtn = document.getElementById("regen-btn");
+const regenFeedback = document.getElementById("regen-feedback");
 
 /** @type {Map<string, { info: ChildInfo, pc: RTCPeerConnection|null, el: HTMLElement, video: HTMLVideoElement, statusEl: HTMLElement, viewBtn: HTMLButtonElement, stopBtn: HTMLButtonElement }>} */
 const children = new Map();
 
-async function init() {
-  const session = await window.ezmonitor.getSessionInfo();
+/** @type {{familyCode:string,parentName:string,port:number,addresses:string[]}|null} */
+let session = null;
+
+function renderSessionInfo() {
+  if (!session) return;
   const addressList = session.addresses.length ? session.addresses.join(", ") : "no LAN address detected";
   sessionInfoEl.innerHTML =
     `Family code: <b>${escapeHtml(session.familyCode)}</b> &middot; ` +
     `This computer: <b>${escapeHtml(session.parentName)}</b> &middot; ` +
     `Address: <b>${escapeHtml(addressList)}:${session.port}</b>`;
 }
+
+async function init() {
+  session = await window.ezmonitor.getSessionInfo();
+  renderSessionInfo();
+}
+
+regenBtn.addEventListener("click", async () => {
+  const confirmed = window.confirm(
+    "Reset the family code?\n\n" +
+      "Any device currently connected will be disconnected immediately. Any paired device that " +
+      "is offline right now will be rejected — and told to pair again — the next time it tries " +
+      "to reconnect with the old code."
+  );
+  if (!confirmed || !session) return;
+
+  regenBtn.disabled = true;
+  const result = await window.ezmonitor.regenerateFamilyCode();
+  session.familyCode = result.familyCode;
+  renderSessionInfo();
+  regenFeedback.textContent =
+    result.kicked > 0
+      ? `New code generated — ${result.kicked} connected device(s) disconnected.`
+      : "New code generated.";
+  regenBtn.disabled = false;
+});
 
 function escapeHtml(str) {
   const div = document.createElement("div");

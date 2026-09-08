@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { listLocalIPv4Addresses } from "@ezmonitor/shared";
 import { BrowserWindow, app, ipcMain } from "electron";
-import { loadOrCreateFamilyCode } from "./familyCode";
+import { loadOrCreateFamilyCode, regenerateFamilyCode } from "./familyCode";
 import { SignalingServer } from "./signalingServer";
 
 let mainWindow: BrowserWindow | null = null;
@@ -48,6 +48,12 @@ app.whenReady().then(() => {
     port: server?.port,
     addresses: listLocalIPv4Addresses(),
   }));
+
+  ipcMain.handle("ezmonitor:regenerate-family-code", () => {
+    const newCode = regenerateFamilyCode();
+    const kicked = server?.regenerateFamilyCode(newCode) ?? 0;
+    return { familyCode: newCode, kicked };
+  });
 
   createWindow();
 

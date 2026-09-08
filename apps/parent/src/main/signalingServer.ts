@@ -23,10 +23,10 @@ interface ChildConnection {
  * child devices.
  */
 export class SignalingServer extends EventEmitter {
-  readonly familyCode: string;
   readonly parentName: string;
   readonly port: number;
 
+  private _familyCode: string;
   private readonly httpServer: http.Server;
   private readonly wss: WebSocketServer;
   private readonly announcer: ParentAnnouncer;
@@ -35,7 +35,7 @@ export class SignalingServer extends EventEmitter {
   constructor(opts: { parentName: string; familyCode: string; port?: number }) {
     super();
     this.parentName = opts.parentName;
-    this.familyCode = opts.familyCode;
+    this._familyCode = opts.familyCode;
     this.port = opts.port ?? DEFAULT_SIGNALING_PORT;
 
     this.httpServer = http.createServer();
@@ -44,10 +44,35 @@ export class SignalingServer extends EventEmitter {
     this.httpServer.listen(this.port);
 
     this.announcer = startParentAnnouncer({
-      familyCode: this.familyCode,
-      parentName: this.parentName,
+      getFamilyCode: () => this._familyCode,
+      getParentName: () => this.parentName,
       port: this.port,
     });
+  }
+
+  get familyCode(): string {
+    return this._familyCode;
+  }
+
+  /**
+   * Rotates the family code (e.g. because it may have leaked outside the
+   * household). Any child device connected right now is told it has been
+   * kicked and disconnected immediately; a device that only has the old
+   * code stored (paired but offline) will be rejected — with a clear
+   * reason — the next time it tries to reconnect. Returns how many
+   * currently-connected devices were disconnected.
+   */
+  regenerateFamilyCode(newCode: string): number {
+    this._familyCode = newCode;
+    const affected = Array.from(this.children.values());
+    for (const conn of affected) {
+      this.sendTo(conn.ws, {
+        type: "kicked",
+        reason: "The family code was reset by the parent for security. Please pair this device again.",
+      });
+      conn.ws.close();
+    }
+    return affected.length;
   }
 
   private handleConnection(ws: WebSocket, req: http.IncomingMessage) {

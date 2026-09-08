@@ -50,6 +50,18 @@ export interface StopViewing {
   type: "stop-viewing";
 }
 
+/**
+ * Parent has revoked this device's pairing — e.g. it reset the family code
+ * because it may have leaked. Sent to currently-connected child devices
+ * right before disconnecting them; a device that is offline at the time
+ * instead gets this as the `reason` on a rejected JoinAck the next time it
+ * tries to reconnect with its now-invalid stored code.
+ */
+export interface KickedMessage {
+  type: "kicked";
+  reason?: string;
+}
+
 export type SignalingMessage =
   | JoinAck
   | ViewRequest
@@ -57,7 +69,8 @@ export type SignalingMessage =
   | SdpOffer
   | SdpAnswer
   | IceCandidateMessage
-  | StopViewing;
+  | StopViewing
+  | KickedMessage;
 
 export interface ChildInfo {
   id: string;

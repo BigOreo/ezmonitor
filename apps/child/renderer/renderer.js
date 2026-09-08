@@ -75,6 +75,10 @@ function renderStatus(status) {
   setupPanel.classList.toggle("hidden", paired);
   statusPanel.classList.toggle("hidden", !paired);
 
+  if (!paired && status.message) {
+    pairStatus.textContent = status.message;
+  }
+
   stateDot.className = "state-dot " + status.state;
   parentNameText.textContent = status.parentName || "your parent's device";
 
@@ -183,6 +187,13 @@ async function handleSignal(message) {
       break;
     }
     case "stop-viewing": {
+      await stopSharing();
+      break;
+    }
+    case "kicked": {
+      // Handled in the main process (clears the stored pairing and pushes
+      // a status update); nothing to do here beyond stopping any active
+      // stream so the last frame doesn't linger.
       await stopSharing();
       break;
     }

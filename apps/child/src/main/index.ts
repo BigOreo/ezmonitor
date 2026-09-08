@@ -41,6 +41,7 @@ let reconnectDelayMs = RECONNECT_START_MS;
 let currentPairing: PairingInfo | null = null;
 let connectionState: ConnectionState = "unpaired";
 let lastParentName = "";
+let lastMessage = "";
 let isSharing = false;
 
 function createWindow(startHidden: boolean) {
@@ -132,18 +133,41 @@ function pushStatus() {
     parentName: lastParentName,
     isSharing,
     paired: !!currentPairing,
+    message: lastMessage,
   });
+  lastMessage = "";
 }
 
-function setConnectionState(state: ConnectionState, parentName?: string) {
+function setConnectionState(state: ConnectionState, parentName?: string, message?: string) {
   connectionState = state;
   if (parentName) lastParentName = parentName;
+  lastMessage = message ?? "";
   pushStatus();
 }
 
 function setSharing(sharing: boolean) {
   isSharing = sharing;
   pushStatus();
+}
+
+/**
+ * Clears any stored pairing and returns to the setup screen. Used both for
+ * a user-initiated "Remove pairing" and for a parent-initiated revocation
+ * (the family code was reset, or the stored code was rejected on
+ * reconnect) — in the latter cases `message` explains why, so the user
+ * isn't left staring at a silent "Reconnecting…" that will never succeed.
+ */
+function performUnpair(message?: string) {
+  reconnectDelayMs = RECONNECT_START_MS;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  ws?.close();
+  ws = null;
+  currentPairing = null;
+  clearPairing();
+  setConnectionState("unpaired", undefined, message);
 }
 
 function connectSocket(opts: ConnectOpts): Promise<ConnectResult> {
@@ -165,6 +189,11 @@ function connectSocket(opts: ConnectOpts): Promise<ConnectResult> {
       if (message.type === "join-ack" && !settled) {
         settled = true;
         resolve({ accepted: message.accepted, parentName: message.parentName, reason: message.reason });
+      }
+      if (message.type === "kicked") {
+        performUnpair(
+          message.reason ?? "This device was unpaired by the parent. Set it up again to resume monitoring."
+        );
       }
       mainWindow?.webContents.send("ezmonitor:signal", message);
     });
@@ -217,6 +246,17 @@ async function attemptReconnect(): Promise<void> {
     childName: pairing.childName,
     idToUse: pairing.childId,
   });
+
+  if (!result.accepted && result.reason === "Invalid family code") {
+    // The parent explicitly rejected this device's stored code (most
+    // likely it was reset for security while this device was offline).
+    // Retrying forever would never succeed, and a LAN re-discovery using
+    // the same now-invalid code won't find the parent either (it only
+    // answers discovery requests carrying its current code) — so stop and
+    // tell the user plainly instead of spinning silently.
+    performUnpair("This device's family code is no longer valid — it may have been reset. Please pair again.");
+    return;
+  }
 
   if (!result.accepted) {
     // The parent computer's LAN IP may have changed (e.g. DHCP lease
@@ -301,16 +341,7 @@ app.whenReady().then(() => {
   ipcMain.handle("ezmonitor:pair", async (_event, opts: PairOptions) => pairWithParent(opts));
 
   ipcMain.handle("ezmonitor:unpair", async () => {
-    reconnectDelayMs = RECONNECT_START_MS;
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    ws?.close();
-    ws = null;
-    currentPairing = null;
-    clearPairing();
-    setConnectionState("unpaired");
+    performUnpair();
   });
 
   ipcMain.handle("ezmonitor:get-screen-source", async () => {

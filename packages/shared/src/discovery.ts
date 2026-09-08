@@ -33,10 +33,14 @@ export interface ParentAnnouncer {
  * Runs on the parent app. Listens for discovery broadcasts from child
  * devices on the LAN and replies directly (unicast) with connection
  * details.
+ *
+ * The family code and parent name are read via getters (rather than
+ * captured once) so that rotating the family code at runtime is reflected
+ * in announce responses immediately, without restarting the UDP listener.
  */
 export function startParentAnnouncer(opts: {
-  familyCode: string;
-  parentName: string;
+  getFamilyCode: () => string;
+  getParentName: () => string;
   port: number;
 }): ParentAnnouncer {
   const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
@@ -49,12 +53,13 @@ export function startParentAnnouncer(opts: {
       return;
     }
     if (parsed.type !== "ezmonitor-discover") return;
-    if (parsed.familyCode && parsed.familyCode !== opts.familyCode) return;
+    const familyCode = opts.getFamilyCode();
+    if (parsed.familyCode && parsed.familyCode !== familyCode) return;
 
     const announce: AnnounceWireMessage = {
       type: "ezmonitor-announce",
-      familyCode: opts.familyCode,
-      parentName: opts.parentName,
+      familyCode,
+      parentName: opts.getParentName(),
       port: opts.port,
     };
     socket.send(JSON.stringify(announce), rinfo.port, rinfo.address);
