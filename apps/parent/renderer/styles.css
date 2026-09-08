@@ -46,7 +46,7 @@ h1 {
   font-size: 14px;
 }
 
-.student-grid {
+.child-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
@@ -58,7 +58,7 @@ h1 {
   grid-column: 1 / -1;
 }
 
-.student-card {
+.child-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -67,38 +67,38 @@ h1 {
   flex-direction: column;
 }
 
-.student-card video {
+.child-card video {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
   object-fit: contain;
 }
 
-.student-card .card-header {
+.child-card .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
 }
 
-.student-card .name {
+.child-card .name {
   font-weight: 600;
 }
 
-.student-card .status {
+.child-card .status {
   font-size: 12px;
   color: var(--muted);
 }
 
-.student-card .status.viewing {
+.child-card .status.viewing {
   color: var(--ok);
 }
 
-.student-card .status.denied {
+.child-card .status.denied {
   color: var(--danger);
 }
 
-.student-card .actions {
+.child-card .actions {
   display: flex;
   gap: 8px;
   padding: 0 12px 12px;

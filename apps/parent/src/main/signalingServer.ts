@@ -1,40 +1,41 @@
 import { EventEmitter } from "node:events";
 import http from "node:http";
 import {
+  ChildInfo,
   DEFAULT_SIGNALING_PORT,
+  ParentAnnouncer,
   SignalingMessage,
-  StudentInfo,
-  TeacherAnnouncer,
-  startTeacherAnnouncer,
+  startParentAnnouncer,
 } from "@ezmonitor/shared";
 import { WebSocket, WebSocketServer } from "ws";
 
-interface StudentConnection {
+interface ChildConnection {
   id: string;
   name: string;
   ws: WebSocket;
 }
 
 /**
- * Hosts the WebSocket signaling server students connect to, and the UDP
- * announcer that lets students auto-discover this teacher on the LAN.
- * Emits high-level events for the renderer (via the main process) to react
- * to, and relays SignalingMessages to/from individual students.
+ * Hosts the WebSocket signaling server child devices connect to, and the
+ * UDP announcer that lets child devices auto-discover this parent app on
+ * the home LAN. Emits high-level events for the renderer (via the main
+ * process) to react to, and relays SignalingMessages to/from individual
+ * child devices.
  */
 export class SignalingServer extends EventEmitter {
-  readonly classCode: string;
-  readonly teacherName: string;
+  readonly familyCode: string;
+  readonly parentName: string;
   readonly port: number;
 
   private readonly httpServer: http.Server;
   private readonly wss: WebSocketServer;
-  private readonly announcer: TeacherAnnouncer;
-  private readonly students = new Map<string, StudentConnection>();
+  private readonly announcer: ParentAnnouncer;
+  private readonly children = new Map<string, ChildConnection>();
 
-  constructor(opts: { teacherName: string; classCode: string; port?: number }) {
+  constructor(opts: { parentName: string; familyCode: string; port?: number }) {
     super();
-    this.teacherName = opts.teacherName;
-    this.classCode = opts.classCode;
+    this.parentName = opts.parentName;
+    this.familyCode = opts.familyCode;
     this.port = opts.port ?? DEFAULT_SIGNALING_PORT;
 
     this.httpServer = http.createServer();
@@ -42,9 +43,9 @@ export class SignalingServer extends EventEmitter {
     this.wss.on("connection", (ws, req) => this.handleConnection(ws, req));
     this.httpServer.listen(this.port);
 
-    this.announcer = startTeacherAnnouncer({
-      classCode: this.classCode,
-      teacherName: this.teacherName,
+    this.announcer = startParentAnnouncer({
+      familyCode: this.familyCode,
+      parentName: this.parentName,
       port: this.port,
     });
   }
@@ -52,31 +53,31 @@ export class SignalingServer extends EventEmitter {
   private handleConnection(ws: WebSocket, req: http.IncomingMessage) {
     const url = new URL(req.url ?? "", "http://localhost");
     const code = url.searchParams.get("code");
-    const studentId = url.searchParams.get("id") ?? cryptoRandomId();
-    const studentName = url.searchParams.get("name") ?? "Unknown Student";
+    const childId = url.searchParams.get("id") ?? cryptoRandomId();
+    const childName = url.searchParams.get("name") ?? "Unknown Device";
 
-    if (code !== this.classCode) {
+    if (code !== this.familyCode) {
       this.sendTo(ws, {
         type: "join-ack",
         accepted: false,
-        teacherName: this.teacherName,
-        reason: "Invalid class code",
+        parentName: this.parentName,
+        reason: "Invalid family code",
       });
       ws.close();
       return;
     }
 
-    const conn: StudentConnection = { id: studentId, name: studentName, ws };
-    this.students.set(studentId, conn);
+    const conn: ChildConnection = { id: childId, name: childName, ws };
+    this.children.set(childId, conn);
 
     this.sendTo(ws, {
       type: "join-ack",
       accepted: true,
-      teacherName: this.teacherName,
+      parentName: this.parentName,
     });
 
-    const info: StudentInfo = { id: studentId, name: studentName };
-    this.emit("student-joined", info);
+    const info: ChildInfo = { id: childId, name: childName };
+    this.emit("child-joined", info);
 
     ws.on("message", (raw) => {
       let message: SignalingMessage;
@@ -85,22 +86,22 @@ export class SignalingServer extends EventEmitter {
       } catch {
         return;
       }
-      this.emit("student-message", studentId, message);
+      this.emit("child-message", childId, message);
     });
 
     ws.on("close", () => {
-      this.students.delete(studentId);
-      this.emit("student-left", studentId);
+      this.children.delete(childId);
+      this.emit("child-left", childId);
     });
 
     ws.on("error", () => {
-      this.students.delete(studentId);
-      this.emit("student-left", studentId);
+      this.children.delete(childId);
+      this.emit("child-left", childId);
     });
   }
 
-  sendToStudent(studentId: string, message: SignalingMessage) {
-    const conn = this.students.get(studentId);
+  sendToChild(childId: string, message: SignalingMessage) {
+    const conn = this.children.get(childId);
     if (conn) this.sendTo(conn.ws, message);
   }
 
@@ -112,7 +113,7 @@ export class SignalingServer extends EventEmitter {
 
   close() {
     this.announcer.stop();
-    for (const conn of this.students.values()) conn.ws.close();
+    for (const conn of this.children.values()) conn.ws.close();
     this.wss.close();
     this.httpServer.close();
   }

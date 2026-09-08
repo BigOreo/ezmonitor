@@ -1,5 +1,5 @@
 {
-  "name": "@ezmonitor/teacher",
+  "name": "@ezmonitor/child",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main/index.js",
@@ -22,11 +22,12 @@
     "typescript": "^5.6.3"
   },
   "build": {
-    "appId": "com.ezmonitor.teacher",
-    "productName": "EzMonitor Teacher",
+    "appId": "com.ezmonitor.child",
+    "productName": "EzMonitor Child",
     "files": [
       "dist/**/*",
       "renderer/**/*",
+      "assets/**/*",
       "package.json"
     ],
     "directories": {
@@ -34,7 +35,7 @@
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.education"
+      "category": "public.app-category.utilities"
     },
     "win": {
       "target": "nsis"

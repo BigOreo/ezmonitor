@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>EzMonitor Teacher</title>
+    <title>EzMonitor Parent</title>
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:;"
@@ -11,12 +11,13 @@
   </head>
   <body>
     <header>
-      <h1>EzMonitor &mdash; Teacher</h1>
+      <h1>EzMonitor &mdash; Parent</h1>
       <div id="session-info" class="session-info">Starting session&hellip;</div>
     </header>
-    <main id="student-grid" class="student-grid">
+    <main id="child-grid" class="child-grid">
       <p id="empty-state" class="empty-state">
-        Waiting for students to join. Give them the class code and your IP address shown above.
+        Waiting for a child device to connect. Enter the family code and this computer's address shown above
+        into the EzMonitor Child app once, on the device you want to monitor.
       </p>
     </main>
     <script type="module" src="renderer.js"></script>

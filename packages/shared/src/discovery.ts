@@ -3,41 +3,42 @@ import { networkInterfaces } from "node:os";
 
 /** UDP port used for LAN auto-discovery broadcasts (not the signaling port). */
 export const DISCOVERY_PORT = 41234;
-/** Default TCP port for the teacher's WebSocket signaling server. */
+/** Default TCP port for the parent app's WebSocket signaling server. */
 export const DEFAULT_SIGNALING_PORT = 41235;
 
 interface DiscoverWireMessage {
   type: "ezmonitor-discover";
-  classCode?: string;
+  familyCode?: string;
 }
 
 interface AnnounceWireMessage {
   type: "ezmonitor-announce";
-  classCode: string;
-  teacherName: string;
+  familyCode: string;
+  parentName: string;
   port: number;
 }
 
-export interface FoundTeacher {
-  teacherName: string;
-  classCode: string;
+export interface FoundParent {
+  parentName: string;
+  familyCode: string;
   host: string;
   port: number;
 }
 
-export interface TeacherAnnouncer {
+export interface ParentAnnouncer {
   stop(): void;
 }
 
 /**
- * Runs on the teacher app. Listens for discovery broadcasts from students
- * on the LAN and replies directly (unicast) with connection details.
+ * Runs on the parent app. Listens for discovery broadcasts from child
+ * devices on the LAN and replies directly (unicast) with connection
+ * details.
  */
-export function startTeacherAnnouncer(opts: {
-  classCode: string;
-  teacherName: string;
+export function startParentAnnouncer(opts: {
+  familyCode: string;
+  parentName: string;
   port: number;
-}): TeacherAnnouncer {
+}): ParentAnnouncer {
   const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
 
   socket.on("message", (msg, rinfo) => {
@@ -48,12 +49,12 @@ export function startTeacherAnnouncer(opts: {
       return;
     }
     if (parsed.type !== "ezmonitor-discover") return;
-    if (parsed.classCode && parsed.classCode !== opts.classCode) return;
+    if (parsed.familyCode && parsed.familyCode !== opts.familyCode) return;
 
     const announce: AnnounceWireMessage = {
       type: "ezmonitor-announce",
-      classCode: opts.classCode,
-      teacherName: opts.teacherName,
+      familyCode: opts.familyCode,
+      parentName: opts.parentName,
       port: opts.port,
     };
     socket.send(JSON.stringify(announce), rinfo.port, rinfo.address);
@@ -61,7 +62,8 @@ export function startTeacherAnnouncer(opts: {
 
   socket.on("error", () => {
     // Discovery is a convenience feature; a bind/socket error here should
-    // not crash the app. Students can still connect via manual IP entry.
+    // not crash the app. Child devices can still connect via manual IP
+    // entry, or a previously stored pairing.
   });
 
   socket.bind(DISCOVERY_PORT, () => {
@@ -74,13 +76,15 @@ export function startTeacherAnnouncer(opts: {
 }
 
 /**
- * Runs on the student app. Broadcasts a discovery request on the LAN and
- * collects announcements from any teacher apps that respond within the
- * timeout window.
+ * Runs on the child app. Broadcasts a discovery request on the LAN and
+ * collects announcements from any parent apps that respond within the
+ * timeout window. Used both for first-time setup and to re-locate the
+ * parent app if its IP address changes after a previously paired
+ * connection stops working.
  */
-export function discoverTeachers(
-  opts: { classCode?: string; timeoutMs?: number },
-  onFound: (teacher: FoundTeacher) => void
+export function discoverParents(
+  opts: { familyCode?: string; timeoutMs?: number },
+  onFound: (parent: FoundParent) => void
 ): Promise<void> {
   return new Promise((resolve) => {
     const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
@@ -94,8 +98,8 @@ export function discoverTeachers(
       }
       if (parsed.type !== "ezmonitor-announce") return;
       onFound({
-        teacherName: parsed.teacherName,
-        classCode: parsed.classCode,
+        parentName: parsed.parentName,
+        familyCode: parsed.familyCode,
         host: rinfo.address,
         port: parsed.port,
       });
@@ -121,7 +125,7 @@ export function discoverTeachers(
       socket.setBroadcast(true);
       const request: DiscoverWireMessage = {
         type: "ezmonitor-discover",
-        classCode: opts.classCode,
+        familyCode: opts.familyCode,
       };
       const payload = Buffer.from(JSON.stringify(request));
       socket.send(payload, DISCOVERY_PORT, "255.255.255.255");
@@ -131,7 +135,7 @@ export function discoverTeachers(
   });
 }
 
-/** Non-internal IPv4 addresses of this machine, for display to the teacher. */
+/** Non-internal IPv4 addresses of this machine, for display to the parent. */
 export function listLocalIPv4Addresses(): string[] {
   const nets = networkInterfaces();
   const results: string[] = [];

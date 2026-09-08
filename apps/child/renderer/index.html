@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>EzMonitor Child</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>EzMonitor &mdash; Child</h1>
+    </header>
+
+    <main>
+      <section id="setup-panel">
+        <p class="hint">
+          Set this up once with a parent's device on the same home network. After that, this app
+          reconnects automatically in the background — you won't need to do this again.
+        </p>
+        <label>
+          This device's name
+          <input id="child-name" type="text" placeholder="e.g. Alex's Laptop" />
+        </label>
+        <label>
+          Family code
+          <input id="family-code" type="text" placeholder="e.g. 3F2A9C" style="text-transform: uppercase" />
+        </label>
+
+        <div class="row">
+          <button id="scan-btn" class="secondary">Scan home network</button>
+        </div>
+        <ul id="found-list" class="found-list"></ul>
+
+        <label>
+          Parent device IP address
+          <input id="parent-host" type="text" placeholder="e.g. 192.168.1.20" />
+        </label>
+        <label>
+          Port
+          <input id="parent-port" type="number" value="41235" />
+        </label>
+
+        <button id="pair-btn">Pair this device</button>
+        <p id="pair-status" class="status-text"></p>
+      </section>
+
+      <section id="status-panel" class="hidden">
+        <div class="status-row">
+          <span id="state-dot" class="state-dot"></span>
+          <span id="state-text">Not connected</span>
+        </div>
+        <p class="hint">
+          This device is set up for monitoring by <b id="parent-name-text"></b>. EzMonitor Child keeps
+          running in the background (see the tray/menu-bar icon) so it stays reachable even if this
+          window is closed.
+        </p>
+        <label class="checkbox-row">
+          <input id="launch-at-login" type="checkbox" />
+          Launch automatically when this computer starts
+        </label>
+        <button id="unpair-btn" class="secondary">Remove pairing</button>
+      </section>
+    </main>
+
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>

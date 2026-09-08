@@ -1,22 +1,18 @@
-import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { listLocalIPv4Addresses } from "@ezmonitor/shared";
 import { BrowserWindow, app, ipcMain } from "electron";
+import { loadOrCreateFamilyCode } from "./familyCode";
 import { SignalingServer } from "./signalingServer";
 
 let mainWindow: BrowserWindow | null = null;
 let server: SignalingServer | null = null;
 
-function generateClassCode(): string {
-  return randomBytes(3).toString("hex").toUpperCase();
-}
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: "EzMonitor Teacher",
+    title: "EzMonitor Parent",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -28,27 +24,27 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  const teacherName = os.hostname();
-  const classCode = generateClassCode();
-  server = new SignalingServer({ teacherName, classCode });
+  const parentName = os.hostname();
+  const familyCode = loadOrCreateFamilyCode();
+  server = new SignalingServer({ parentName, familyCode });
 
-  server.on("student-joined", (student) => {
-    mainWindow?.webContents.send("ezmonitor:student-joined", student);
+  server.on("child-joined", (child) => {
+    mainWindow?.webContents.send("ezmonitor:child-joined", child);
   });
-  server.on("student-left", (id: string) => {
-    mainWindow?.webContents.send("ezmonitor:student-left", id);
+  server.on("child-left", (id: string) => {
+    mainWindow?.webContents.send("ezmonitor:child-left", id);
   });
-  server.on("student-message", (id: string, message: unknown) => {
-    mainWindow?.webContents.send("ezmonitor:student-message", id, message);
+  server.on("child-message", (id: string, message: unknown) => {
+    mainWindow?.webContents.send("ezmonitor:child-message", id, message);
   });
 
-  ipcMain.on("ezmonitor:send-to-student", (_event, studentId: string, message) => {
-    server?.sendToStudent(studentId, message);
+  ipcMain.on("ezmonitor:send-to-child", (_event, childId: string, message) => {
+    server?.sendToChild(childId, message);
   });
 
   ipcMain.handle("ezmonitor:get-session-info", () => ({
-    classCode: server?.classCode,
-    teacherName: server?.teacherName,
+    familyCode: server?.familyCode,
+    parentName: server?.parentName,
     port: server?.port,
     addresses: listLocalIPv4Addresses(),
   }));

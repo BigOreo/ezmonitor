@@ -1,21 +1,21 @@
 // Plain-JS renderer (no bundler): loaded directly by Chromium via <script type="module">.
 // window.ezmonitor is exposed by ../src/preload/index.ts via contextBridge.
 
-/** @typedef {{id:string,name:string}} StudentInfo */
+/** @typedef {{id:string,name:string}} ChildInfo */
 
-const grid = document.getElementById("student-grid");
+const grid = document.getElementById("child-grid");
 const emptyState = document.getElementById("empty-state");
 const sessionInfoEl = document.getElementById("session-info");
 
-/** @type {Map<string, { info: StudentInfo, pc: RTCPeerConnection|null, el: HTMLElement, video: HTMLVideoElement, statusEl: HTMLElement, viewBtn: HTMLButtonElement, stopBtn: HTMLButtonElement }>} */
-const students = new Map();
+/** @type {Map<string, { info: ChildInfo, pc: RTCPeerConnection|null, el: HTMLElement, video: HTMLVideoElement, statusEl: HTMLElement, viewBtn: HTMLButtonElement, stopBtn: HTMLButtonElement }>} */
+const children = new Map();
 
 async function init() {
   const session = await window.ezmonitor.getSessionInfo();
   const addressList = session.addresses.length ? session.addresses.join(", ") : "no LAN address detected";
   sessionInfoEl.innerHTML =
-    `Class code: <b>${escapeHtml(session.classCode)}</b> &middot; ` +
-    `Teacher: <b>${escapeHtml(session.teacherName)}</b> &middot; ` +
+    `Family code: <b>${escapeHtml(session.familyCode)}</b> &middot; ` +
+    `This computer: <b>${escapeHtml(session.parentName)}</b> &middot; ` +
     `Address: <b>${escapeHtml(addressList)}:${session.port}</b>`;
 }
 
@@ -26,12 +26,12 @@ function escapeHtml(str) {
 }
 
 function updateEmptyState() {
-  emptyState.style.display = students.size === 0 ? "block" : "none";
+  emptyState.style.display = children.size === 0 ? "block" : "none";
 }
 
-function addStudentCard(info) {
+function addChildCard(info) {
   const card = document.createElement("div");
-  card.className = "student-card";
+  card.className = "child-card";
   card.innerHTML = `
     <video autoplay playsinline></video>
     <div class="card-header">
@@ -59,32 +59,32 @@ function addStudentCard(info) {
   entry.viewBtn.addEventListener("click", () => startViewing(info.id));
   entry.stopBtn.addEventListener("click", () => stopViewing(info.id));
 
-  students.set(info.id, entry);
+  children.set(info.id, entry);
   updateEmptyState();
 }
 
-function removeStudentCard(studentId) {
-  const entry = students.get(studentId);
+function removeChildCard(childId) {
+  const entry = children.get(childId);
   if (!entry) return;
   entry.pc?.close();
   entry.el.remove();
-  students.delete(studentId);
+  children.delete(childId);
   updateEmptyState();
 }
 
-function startViewing(studentId) {
-  const entry = students.get(studentId);
+function startViewing(childId) {
+  const entry = children.get(childId);
   if (!entry) return;
-  entry.statusEl.textContent = "Requesting consent…";
+  entry.statusEl.textContent = "Connecting…";
   entry.statusEl.className = "status";
   entry.viewBtn.disabled = true;
-  window.ezmonitor.sendToStudent(studentId, { type: "view-request" });
+  window.ezmonitor.sendToChild(childId, { type: "view-request" });
 }
 
-function stopViewing(studentId) {
-  const entry = students.get(studentId);
+function stopViewing(childId) {
+  const entry = children.get(childId);
   if (!entry) return;
-  window.ezmonitor.sendToStudent(studentId, { type: "stop-viewing" });
+  window.ezmonitor.sendToChild(childId, { type: "stop-viewing" });
   entry.pc?.close();
   entry.pc = null;
   entry.video.srcObject = null;
@@ -94,8 +94,8 @@ function stopViewing(studentId) {
   entry.stopBtn.disabled = true;
 }
 
-function ensurePeerConnection(studentId) {
-  const entry = students.get(studentId);
+function ensurePeerConnection(childId) {
+  const entry = children.get(childId);
   if (!entry) return null;
   if (entry.pc) return entry.pc;
 
@@ -103,7 +103,7 @@ function ensurePeerConnection(studentId) {
   const pc = new RTCPeerConnection({ iceServers: [] });
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      window.ezmonitor.sendToStudent(studentId, {
+      window.ezmonitor.sendToChild(childId, {
         type: "ice-candidate",
         candidate: event.candidate.toJSON(),
       });
@@ -126,26 +126,26 @@ function ensurePeerConnection(studentId) {
   return pc;
 }
 
-async function handleStudentMessage(studentId, message) {
-  const entry = students.get(studentId);
+async function handleChildMessage(childId, message) {
+  const entry = children.get(childId);
   if (!entry) return;
 
   switch (message.type) {
     case "consent-response": {
       if (!message.granted) {
-        entry.statusEl.textContent = "Student declined";
+        entry.statusEl.textContent = message.reason ?? "Couldn't start streaming";
         entry.statusEl.className = "status denied";
         entry.viewBtn.disabled = false;
       }
       break;
     }
     case "offer": {
-      const pc = ensurePeerConnection(studentId);
+      const pc = ensurePeerConnection(childId);
       if (!pc) return;
       await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      window.ezmonitor.sendToStudent(studentId, { type: "answer", sdp: answer.sdp });
+      window.ezmonitor.sendToChild(childId, { type: "answer", sdp: answer.sdp });
       break;
     }
     case "ice-candidate": {
@@ -164,8 +164,8 @@ async function handleStudentMessage(studentId, message) {
   }
 }
 
-window.ezmonitor.onStudentJoined((student) => addStudentCard(student));
-window.ezmonitor.onStudentLeft((studentId) => removeStudentCard(studentId));
-window.ezmonitor.onStudentMessage((studentId, message) => handleStudentMessage(studentId, message));
+window.ezmonitor.onChildJoined((child) => addChildCard(child));
+window.ezmonitor.onChildLeft((childId) => removeChildCard(childId));
+window.ezmonitor.onChildMessage((childId, message) => handleChildMessage(childId, message));
 
 init();
