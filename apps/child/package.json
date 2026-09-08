@@ -1,6 +1,8 @@
 {
   "name": "@ezmonitor/child",
   "version": "0.1.0",
+  "description": "EzMonitor Child — pairs with a parent's EzMonitor app for home-network screen monitoring",
+  "author": "EzMonitor",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
@@ -22,6 +24,9 @@
     "typescript": "^5.6.3"
   },
   "build": {
+    "electronVersion": "32.3.3",
+    "npmRebuild": false,
+    "publish": null,
     "appId": "com.ezmonitor.child",
     "productName": "EzMonitor Child",
     "files": [
@@ -38,7 +43,8 @@
       "category": "public.app-category.utilities"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false
     }
   }
 }

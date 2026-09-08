@@ -166,9 +166,44 @@ npm run dist:win   # produces an NSIS .exe installer under release/
 npm run dist:mac   # produces a .dmg under release/
 ```
 
-Cross-building for macOS requires running on a Mac (Apple's tooling isn't
-available on Linux/Windows). Building the Windows installer works from any
-platform electron-builder supports.
+Cross-building a real `.dmg` requires running on a Mac — DMG creation
+depends on macOS's own `hdiutil`, which doesn't exist elsewhere, and this
+is a hard limitation of electron-builder itself, not a config issue. The
+Windows NSIS installer, on the other hand, *can* be cross-built from Linux
+(what this repo's CI/dev sandbox actually does), provided Wine is
+installed for both architectures:
+
+```bash
+sudo dpkg --add-architecture i386 && sudo apt-get update
+sudo apt-get install -y wine wine64 wine32:i386
+```
+
+For a quick way to test on macOS without a Mac available to build on, an
+unsigned `.app` can still be produced on Linux as a zip (skips DMG
+packaging and code signing entirely):
+
+```bash
+npx electron-builder --mac zip --x64     # Intel Macs
+npx electron-builder --mac zip --arm64   # Apple Silicon Macs
+```
+
+Unzip it and right-click → Open the first time (macOS Gatekeeper blocks an
+unsigned/unnotarized app by default on a plain double-click) — this is
+expected for any unsigned build, not specific to this project.
+
+Two package.json `build` settings matter a lot in this npm-workspaces
+monorepo and are easy to regress:
+
+- `npmRebuild: false` — without it, electron-builder's packaging step runs
+  an install/prune pass scoped to the single app being built, which (in
+  this workspace layout) prunes the **shared root `node_modules`** down to
+  almost nothing, breaking every other workspace. If a build ever seems to
+  "eat" `node_modules`, this is why — run `npm install` at the repo root
+  to recover, and don't remove this setting.
+- `win.signAndEditExecutable: false` — without it, electron-builder tries
+  to inject the `.exe`'s icon/version resources via a Windows tool run
+  through Wine, which needs a full 32-bit Wine prefix and otherwise fails
+  the whole build with "wine is required".
 
 ## Platform notes & permissions
 
