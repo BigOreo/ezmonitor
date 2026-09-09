@@ -71,6 +71,7 @@ function addChildCard(info) {
     <div class="actions">
       <button class="view-btn">Start Viewing</button>
       <button class="stop-btn secondary" disabled>Stop Viewing</button>
+      <button class="fullscreen-btn secondary" disabled>Fullscreen</button>
     </div>
   `;
   card.querySelector(".name").textContent = info.name;
@@ -84,10 +85,16 @@ function addChildCard(info) {
     statusEl: card.querySelector(".status"),
     viewBtn: card.querySelector(".view-btn"),
     stopBtn: card.querySelector(".stop-btn"),
+    fullscreenBtn: card.querySelector(".fullscreen-btn"),
   };
 
   entry.viewBtn.addEventListener("click", () => startViewing(info.id));
   entry.stopBtn.addEventListener("click", () => stopViewing(info.id));
+  entry.fullscreenBtn.addEventListener("click", () => toggleFullscreen(info.id));
+  entry.video.addEventListener("dblclick", () => toggleFullscreen(info.id));
+  entry.video.addEventListener("fullscreenchange", () => {
+    entry.fullscreenBtn.textContent = document.fullscreenElement === entry.video ? "Exit Fullscreen" : "Fullscreen";
+  });
 
   children.set(info.id, entry);
   updateEmptyState();
@@ -122,6 +129,20 @@ function stopViewing(childId) {
   entry.statusEl.className = "status";
   entry.viewBtn.disabled = false;
   entry.stopBtn.disabled = true;
+  entry.fullscreenBtn.disabled = true;
+  if (document.fullscreenElement === entry.video) {
+    document.exitFullscreen();
+  }
+}
+
+function toggleFullscreen(childId) {
+  const entry = children.get(childId);
+  if (!entry) return;
+  if (document.fullscreenElement === entry.video) {
+    document.exitFullscreen();
+  } else {
+    entry.video.requestFullscreen().catch((err) => console.error("Failed to enter fullscreen", err));
+  }
 }
 
 function ensurePeerConnection(childId) {
@@ -144,6 +165,7 @@ function ensurePeerConnection(childId) {
     entry.statusEl.textContent = "Viewing";
     entry.statusEl.className = "status viewing";
     entry.stopBtn.disabled = false;
+    entry.fullscreenBtn.disabled = false;
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
