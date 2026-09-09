@@ -26,7 +26,7 @@ jobs:
         run: npm run build --workspace=@ezmonitor/shared
 
       - name: Build ${{ matrix.app }} installer
-        run: npm run dist:mac
+        run: npm run dist:mac -- --x64 --arm64
         working-directory: apps/${{ matrix.app }}
 
       - uses: actions/upload-artifact@v4
