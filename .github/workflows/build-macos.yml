@@ -1,0 +1,35 @@
+name: Build macOS installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        app: [parent, child]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build shared package
+        run: npm run build --workspace=@ezmonitor/shared
+
+      - name: Build ${{ matrix.app }} installer
+        run: npm run dist:mac
+        working-directory: apps/${{ matrix.app }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ezmonitor-${{ matrix.app }}-macos
+          path: apps/${{ matrix.app }}/release/*.dmg
