@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KidEmonitor Browser Portal</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self';"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>KidEmonitor &mdash; Browser Portal</h1>
+      <span id="connection-status" class="session-info"></span>
+    </header>
+
+    <section id="code-panel" class="code-panel">
+      <p class="hint">
+        Enter the family code shown in the KidEmonitor Parent app on this same home network to view
+        paired devices here.
+      </p>
+      <label>
+        Family code
+        <input id="family-code" type="text" placeholder="e.g. 3F2A9C" style="text-transform: uppercase" />
+      </label>
+      <button id="connect-btn">Connect</button>
+      <p id="code-status" class="status-text"></p>
+    </section>
+
+    <main id="child-grid" class="child-grid hidden">
+      <p id="empty-state" class="empty-state">Waiting for a child device to connect…</p>
+    </main>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

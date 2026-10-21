@@ -12,8 +12,12 @@ const stateText = el("state-text");
 const parentNameText = el("parent-name-text");
 const launchAtLoginCheckbox = el("launch-at-login");
 
-let currentPc = null;
-let currentStream = null;
+// A single capture is shared across every concurrent viewer (the parent
+// app's own window, plus any number of browser portal tabs) — each gets
+// its own RTCPeerConnection, but there's only ever one getUserMedia call.
+let sharedStream = null;
+/** @type {Map<string, { pc: RTCPeerConnection }>} */
+const sessions = new Map();
 
 el("scan-btn").addEventListener("click", scanForParents);
 el("pair-btn").addEventListener("click", pair);
@@ -66,7 +70,7 @@ async function pair() {
 }
 
 async function unpair() {
-  await stopSharing();
+  stopAllSessions();
   await window.kidemonitor.unpair();
 }
 
@@ -98,53 +102,63 @@ function renderStatus(status) {
   }
 }
 
-async function startSharing() {
+function sendSignal(viewerId, payload) {
+  window.kidemonitor.sendSignal({ ...payload, viewerId });
+}
+
+async function ensureSharedStream() {
+  if (sharedStream) return sharedStream;
+  const sourceId = await window.kidemonitor.getScreenSource();
+  if (!sourceId) return null;
+  sharedStream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: {
+      mandatory: {
+        chromeMediaSource: "desktop",
+        chromeMediaSourceId: sourceId,
+      },
+    },
+  });
+  return sharedStream;
+}
+
+async function startSharingFor(viewerId) {
   try {
-    const sourceId = await window.kidemonitor.getScreenSource();
-    if (!sourceId) {
-      window.kidemonitor.sendSignal({ type: "consent-response", granted: false, reason: "No screen source available" });
+    const stream = await ensureSharedStream();
+    if (!stream) {
+      sendSignal(viewerId, { type: "consent-response", granted: false, reason: "No screen source available" });
       return;
     }
 
-    currentStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: "desktop",
-          chromeMediaSourceId: sourceId,
-        },
-      },
-    });
-
     // LAN-only: host ICE candidates are sufficient, no STUN/TURN needed.
     const pc = new RTCPeerConnection({ iceServers: [] });
-    currentPc = pc;
+    sessions.set(viewerId, { pc });
 
-    for (const track of currentStream.getTracks()) {
-      pc.addTrack(track, currentStream);
+    for (const track of stream.getTracks()) {
+      pc.addTrack(track, stream);
     }
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        window.kidemonitor.sendSignal({ type: "ice-candidate", candidate: event.candidate.toJSON() });
+        sendSignal(viewerId, { type: "ice-candidate", candidate: event.candidate.toJSON() });
       }
     };
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-        stopSharing();
+        stopSessionFor(viewerId);
       }
     };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    window.kidemonitor.sendSignal({ type: "consent-response", granted: true });
-    window.kidemonitor.sendSignal({ type: "offer", sdp: offer.sdp });
+    sendSignal(viewerId, { type: "consent-response", granted: true });
+    sendSignal(viewerId, { type: "offer", sdp: offer.sdp });
     window.kidemonitor.setSharingState(true);
   } catch (err) {
     console.error("Failed to start sharing", err);
-    window.kidemonitor.sendSignal({
+    sendSignal(viewerId, {
       type: "consent-response",
       granted: false,
       reason: "Screen capture failed (check screen-recording permission)",
@@ -152,34 +166,45 @@ async function startSharing() {
   }
 }
 
-async function stopSharing() {
-  if (currentStream) {
-    for (const track of currentStream.getTracks()) track.stop();
-    currentStream = null;
+function stopSessionFor(viewerId) {
+  const session = sessions.get(viewerId);
+  if (session) {
+    session.pc.close();
+    sessions.delete(viewerId);
   }
-  if (currentPc) {
-    currentPc.close();
-    currentPc = null;
+  window.kidemonitor.setSharingState(sessions.size > 0);
+
+  // Once nobody is watching, release the capture entirely rather than
+  // leaving it running in the background.
+  if (sessions.size === 0 && sharedStream) {
+    for (const track of sharedStream.getTracks()) track.stop();
+    sharedStream = null;
   }
-  window.kidemonitor.setSharingState(false);
+}
+
+function stopAllSessions() {
+  for (const viewerId of [...sessions.keys()]) stopSessionFor(viewerId);
 }
 
 async function handleSignal(message) {
+  const viewerId = message.viewerId;
   switch (message.type) {
     case "view-request": {
-      await startSharing();
+      await startSharingFor(viewerId);
       break;
     }
     case "answer": {
-      if (currentPc) {
-        await currentPc.setRemoteDescription({ type: "answer", sdp: message.sdp });
+      const session = sessions.get(viewerId);
+      if (session) {
+        await session.pc.setRemoteDescription({ type: "answer", sdp: message.sdp });
       }
       break;
     }
     case "ice-candidate": {
-      if (currentPc) {
+      const session = sessions.get(viewerId);
+      if (session) {
         try {
-          await currentPc.addIceCandidate(message.candidate);
+          await session.pc.addIceCandidate(message.candidate);
         } catch (err) {
           console.error("Failed to add ICE candidate", err);
         }
@@ -187,14 +212,14 @@ async function handleSignal(message) {
       break;
     }
     case "stop-viewing": {
-      await stopSharing();
+      stopSessionFor(viewerId);
       break;
     }
     case "kicked": {
-      // Handled in the main process (clears the stored pairing and pushes
-      // a status update); nothing to do here beyond stopping any active
-      // stream so the last frame doesn't linger.
-      await stopSharing();
+      // Pairing itself is handled in the main process (clears the stored
+      // pairing and pushes a status update); stop every active viewing
+      // session here so no stale stream keeps running.
+      stopAllSessions();
       break;
     }
     default:

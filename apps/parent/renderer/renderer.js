@@ -6,13 +6,14 @@
 const grid = document.getElementById("child-grid");
 const emptyState = document.getElementById("empty-state");
 const sessionInfoEl = document.getElementById("session-info");
+const portalInfoEl = document.getElementById("portal-info");
 const regenBtn = document.getElementById("regen-btn");
 const regenFeedback = document.getElementById("regen-feedback");
 
 /** @type {Map<string, { info: ChildInfo, pc: RTCPeerConnection|null, el: HTMLElement, video: HTMLVideoElement, statusEl: HTMLElement, viewBtn: HTMLButtonElement, stopBtn: HTMLButtonElement }>} */
 const children = new Map();
 
-/** @type {{familyCode:string,parentName:string,port:number,addresses:string[]}|null} */
+/** @type {{familyCode:string,parentName:string,port:number,addresses:string[],browserPortalUrls:string[]}|null} */
 let session = null;
 
 function renderSessionInfo() {
@@ -22,6 +23,27 @@ function renderSessionInfo() {
     `Family code: <b>${escapeHtml(session.familyCode)}</b> &middot; ` +
     `This computer: <b>${escapeHtml(session.parentName)}</b> &middot; ` +
     `Address: <b>${escapeHtml(addressList)}:${session.port}</b>`;
+
+  if (session.browserPortalUrls.length === 0) {
+    portalInfoEl.textContent =
+      "Browser portal unavailable (no LAN address detected) — view from another computer or phone's " +
+      "browser on the same Wi-Fi once this computer has an address.";
+    return;
+  }
+
+  portalInfoEl.innerHTML =
+    "Browser portal (view from any browser on this Wi-Fi, no install needed): " +
+    session.browserPortalUrls.map((url) => `<b>${escapeHtml(url)}</b>`).join(", ") +
+    ` <button id="copy-portal-btn" class="secondary small">Copy link</button>`;
+
+  document.getElementById("copy-portal-btn")?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(session.browserPortalUrls[0]);
+      portalInfoEl.querySelector("#copy-portal-btn").textContent = "Copied!";
+    } catch (err) {
+      console.error("Failed to copy portal link", err);
+    }
+  });
 }
 
 async function init() {

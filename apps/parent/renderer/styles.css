@@ -46,6 +46,22 @@ h1 {
   font-size: 14px;
 }
 
+.portal-info {
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.portal-info a {
+  color: var(--accent);
+  font-family: monospace;
+}
+
 .child-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

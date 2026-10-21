@@ -6,6 +6,7 @@ export interface SessionInfo {
   parentName: string;
   port: number;
   addresses: string[];
+  browserPortalUrls: string[];
 }
 
 const api = {

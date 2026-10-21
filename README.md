@@ -40,33 +40,40 @@ banner on every check-in.
 
 ## How it works
 
-There are two separate installable desktop apps:
+There are two installable desktop apps, plus a browser-based alternative
+to the parent app that needs no install at all:
 
 - **`apps/parent`** — run by the parent. It hosts a small local WebSocket
-  "signaling" server and a UDP broadcast responder so a child device on the
-  same home network can find and pair with it.
+  "signaling" server, a UDP broadcast responder so a child device on the
+  same home network can find and pair with it, and the **browser portal**
+  — a small web page it serves on the same port, so any browser on the
+  same Wi-Fi (a phone, a tablet, another computer) can view paired
+  children's screens without installing anything.
 - **`apps/child`** — run on the child's computer. It's paired with a parent
   device **once**; after that it reconnects automatically in the background
   every time both computers are on the network, without needing the code
   re-entered.
 
-The screen video is never relayed through any server: once the two apps
+The screen video is never relayed through any server: once two sides
 exchange connection details, video flows directly peer-to-peer over
-[WebRTC](https://webrtc.org/). Because both apps are on the same LAN, no
-STUN/TURN server is needed — the apps use direct host ICE candidates only,
-so this works fully offline (no internet required, no cloud account, no
-video ever leaves the home network).
+[WebRTC](https://webrtc.org/). Because everything stays on the same LAN,
+no STUN/TURN server is needed — connections use direct host ICE
+candidates only, so this works fully offline (no internet required, no
+cloud account, no video ever leaves the home network). A child device can
+be watched by more than one viewer at once — the parent app's own window
+and any number of browser portal tabs — each gets its own independent
+peer-to-peer connection from a single shared screen capture.
 
 ```
- ┌─────────────┐   UDP broadcast (discovery)   ┌─────────────┐
- │             │ ─────────────────────────────▶ │             │
- │  Child      │   WebSocket (pairing, SDP      │  Parent     │
- │  app        │◀──offer/answer, ICE candidates)▶│  app        │
- │             │                                 │             │
- └─────────────┘                                 └─────────────┘
-        │                                               ▲
-        └──────────────  WebRTC video (screen)  ─────────┘
-                     (direct peer-to-peer, LAN only)
+ ┌─────────────┐   UDP broadcast (discovery)   ┌─────────────┐    serves      ┌──────────────┐
+ │             │ ─────────────────────────────▶ │             │ ─────────────▶ │  Any browser │
+ │  Child      │   WebSocket (pairing, SDP      │  Parent     │   portal page  │  on the LAN  │
+ │  app        │◀──offer/answer, ICE candidates)▶│  app        │◀───WebSocket──▶│  (no install)│
+ │             │                                 │             │   (same port)  │              │
+ └─────────────┘                                 └─────────────┘                └──────────────┘
+        │                                               ▲                              ▲
+        │                 WebRTC video (screen)         │                              │
+        └───────────────────────────────────────────────┴── direct peer-to-peer, LAN ──┘
 ```
 
 ### Pairing & session flow
@@ -105,6 +112,39 @@ block monitoring, defeating the point. The `apps/child` renderer
 the parent app whether streaming actually started (e.g. it fails if screen
 recording permission wasn't granted) — it is not a permission gate.
 
+### Viewing from a browser (the browser portal)
+
+The parent app's signaling server also answers plain HTTP requests on the
+same port, serving a small static page (`apps/parent/browser-viewer/`).
+Open `http://<this computer's LAN address>:41235` (shown in the parent
+app's header, with a **Copy link** button) from any browser on the same
+Wi-Fi/LAN — a phone, a tablet, another computer — enter the family code
+once, and it shows the same live grid of paired children with the same
+Start/Stop Viewing controls, no install required. The browser tab gets its
+own independent WebRTC connection to the child device (same LAN-only, no
+STUN/TURN model as everything else here); it doesn't share or depend on
+the parent app's own view, so you can have the desktop app and several
+browser tabs all watching (or not watching) independently.
+
+Under the hood this needed the signaling protocol to support more than
+one simultaneous viewer per child (see the comment at the top of
+`packages/shared/src/protocol.ts`): every per-session message carries
+either a `viewerId` (heading to a child, which may be serving several
+viewers) or a `childId` (heading to a viewer, which may be watching
+several children) so the server can route correctly; the parent app's own
+window is just a fixed viewer id (`"local"`) under the same mechanism. The
+child device still only captures its screen once no matter how many
+viewers are watching — each gets its own `RTCPeerConnection` fed from that
+one capture, and the capture stops automatically once the last viewer
+disconnects.
+
+Browser viewer sessions are authenticated by the family code exactly like
+child devices, including being kicked immediately if the parent resets
+the code (see below) — the only difference is a browser session doesn't
+persist across a page reload (it's a live view, not a managed pairing), so
+reopening the portal just asks for the code again (remembered in that
+browser's local storage for convenience, not synced anywhere).
+
 ### Resetting the family code
 
 If the family code is ever shared or leaked beyond the household, the
@@ -126,14 +166,16 @@ generates and persists a brand new one:
 ## Repository layout
 
 ```
-packages/shared/     Protocol types + LAN discovery (UDP) helpers, used by both apps
-apps/parent/         Parent Electron app (main process, preload, renderer)
-apps/child/          Child Electron app (main process, preload, renderer, tray icon asset)
+packages/shared/           Protocol types + LAN discovery (UDP) helpers, used by both apps
+apps/parent/                Parent Electron app (main process, preload, renderer)
+apps/parent/browser-viewer/ The browser portal's static page, served by the parent app's own HTTP server
+apps/child/                 Child Electron app (main process, preload, renderer, tray icon asset)
 ```
 
 Each app's `src/main` and `src/preload` are TypeScript, compiled with `tsc`
-to `dist/`. The `renderer/` folders are plain HTML/CSS/JS (no bundler) —
-Chromium's renderer process loads them directly via
+to `dist/`. The `renderer/` and `browser-viewer/` folders are plain
+HTML/CSS/JS (no bundler) — Chromium's renderer process (and, for
+`browser-viewer/`, any browser) loads them directly via
 `<script type="module">`, which keeps the build simple.
 
 ## Getting started (development)
@@ -226,14 +268,20 @@ monorepo and are easy to regress:
 ## Known limitations / suggested next steps
 
 - This development sandbox is a headless Linux container with no display,
-  so the Electron GUIs could not be interactively tested here — only
-  `tsc` type-checking, `npm run build`, and Node syntax validation of the
-  compiled output were run. **Please test the actual pairing, background
-  reconnect, and live video flow on real Windows/Mac machines** before
-  relying on this.
+  so the Electron GUIs and the browser portal's actual in-browser WebRTC
+  flow could not be interactively tested here — only `tsc` type-checking,
+  `npm run build`, Node syntax validation of the compiled output, and (for
+  the signaling server's new multi-viewer routing specifically) a
+  standalone Node script exercising the real WebSocket/HTTP server
+  end-to-end were run. **Please test the actual pairing, background
+  reconnect, browser portal, and live video flow on real Windows/Mac
+  machines** before relying on this.
 - No reconnect notification/history — the parent app doesn't currently log
   when a child device went offline/came back, just its live state.
 - No support yet for viewing many child devices at once in a low-bandwidth
-  "thumbnail wall" mode — each viewed stream is currently full quality.
-- Auto-update, code signing/notarization, and CI build pipelines for the
-  installers are not yet set up.
+  "thumbnail wall" mode — each viewed stream is currently full quality,
+  and that's multiplied per viewer (desktop app + each open browser tab)
+  since every viewer gets its own independent peer connection.
+- Auto-update and code signing/notarization for the installers are not
+  yet set up (CI build pipelines for Windows/macOS installers are, under
+  `.github/workflows/`).

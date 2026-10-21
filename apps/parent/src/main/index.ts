@@ -26,7 +26,8 @@ function createWindow() {
 app.whenReady().then(() => {
   const parentName = os.hostname();
   const familyCode = loadOrCreateFamilyCode();
-  server = new SignalingServer({ parentName, familyCode });
+  const browserViewerDir = path.join(__dirname, "../../browser-viewer");
+  server = new SignalingServer({ parentName, familyCode, browserViewerDir });
 
   server.on("child-joined", (child) => {
     mainWindow?.webContents.send("kidemonitor:child-joined", child);
@@ -39,15 +40,22 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on("kidemonitor:send-to-child", (_event, childId: string, message) => {
-    server?.sendToChild(childId, message);
+    // The parent app's own window is always viewer "local" — see
+    // packages/shared/src/protocol.ts for why messages need this tag.
+    server?.sendToChild(childId, { ...message, viewerId: "local" });
   });
 
-  ipcMain.handle("kidemonitor:get-session-info", () => ({
-    familyCode: server?.familyCode,
-    parentName: server?.parentName,
-    port: server?.port,
-    addresses: listLocalIPv4Addresses(),
-  }));
+  ipcMain.handle("kidemonitor:get-session-info", () => {
+    const addresses = listLocalIPv4Addresses();
+    const port = server?.port;
+    return {
+      familyCode: server?.familyCode,
+      parentName: server?.parentName,
+      port,
+      addresses,
+      browserPortalUrls: addresses.map((address) => `http://${address}:${port}`),
+    };
+  });
 
   ipcMain.handle("kidemonitor:regenerate-family-code", () => {
     const newCode = regenerateFamilyCode();
