@@ -7,12 +7,12 @@ export const DISCOVERY_PORT = 41234;
 export const DEFAULT_SIGNALING_PORT = 41235;
 
 interface DiscoverWireMessage {
-  type: "ezmonitor-discover";
+  type: "kidemonitor-discover";
   familyCode?: string;
 }
 
 interface AnnounceWireMessage {
-  type: "ezmonitor-announce";
+  type: "kidemonitor-announce";
   familyCode: string;
   parentName: string;
   port: number;
@@ -52,12 +52,12 @@ export function startParentAnnouncer(opts: {
     } catch {
       return;
     }
-    if (parsed.type !== "ezmonitor-discover") return;
+    if (parsed.type !== "kidemonitor-discover") return;
     const familyCode = opts.getFamilyCode();
     if (parsed.familyCode && parsed.familyCode !== familyCode) return;
 
     const announce: AnnounceWireMessage = {
-      type: "ezmonitor-announce",
+      type: "kidemonitor-announce",
       familyCode,
       parentName: opts.getParentName(),
       port: opts.port,
@@ -101,7 +101,7 @@ export function discoverParents(
       } catch {
         return;
       }
-      if (parsed.type !== "ezmonitor-announce") return;
+      if (parsed.type !== "kidemonitor-announce") return;
       onFound({
         parentName: parsed.parentName,
         familyCode: parsed.familyCode,
@@ -129,7 +129,7 @@ export function discoverParents(
     socket.bind(0, () => {
       socket.setBroadcast(true);
       const request: DiscoverWireMessage = {
-        type: "ezmonitor-discover",
+        type: "kidemonitor-discover",
         familyCode: opts.familyCode,
       };
       const payload = Buffer.from(JSON.stringify(request));

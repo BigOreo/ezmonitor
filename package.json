@@ -1,5 +1,5 @@
 {
-  "name": "ezmonitor",
+  "name": "kidemonitor",
   "private": true,
   "version": "0.1.0",
   "description": "Parent/child home network screen monitoring suite",
@@ -8,10 +8,10 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@ezmonitor/shared && npm run build --workspace=@ezmonitor/parent && npm run build --workspace=@ezmonitor/child",
+    "build": "npm run build --workspace=@kidemonitor/shared && npm run build --workspace=@kidemonitor/parent && npm run build --workspace=@kidemonitor/child",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "start:parent": "npm run start --workspace=@ezmonitor/parent",
-    "start:child": "npm run start --workspace=@ezmonitor/child"
+    "start:parent": "npm run start --workspace=@kidemonitor/parent",
+    "start:child": "npm run start --workspace=@kidemonitor/child"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

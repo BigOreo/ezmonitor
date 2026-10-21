@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { FoundParent, SignalingMessage, discoverParents } from "@ezmonitor/shared";
+import { FoundParent, SignalingMessage, discoverParents } from "@kidemonitor/shared";
 import { BrowserWindow, Menu, Tray, app, desktopCapturer, ipcMain, nativeImage } from "electron";
 import WebSocket from "ws";
 import { PairingInfo, clearPairing, loadPairing, savePairing } from "./pairing";
@@ -54,7 +54,7 @@ function createWindow(startHidden: boolean) {
     width: 480,
     height: 480,
     show: !startHidden,
-    title: "EzMonitor Child",
+    title: "KidEmonitor Child",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -104,7 +104,7 @@ function updateTray() {
   if (!tray) return;
   const label = statusLabel();
   const menu = Menu.buildFromTemplate([
-    { label: "EzMonitor Child", enabled: false },
+    { label: "KidEmonitor Child", enabled: false },
     { label, enabled: false },
     { type: "separator" },
     { label: "Open", click: () => createWindow(false) },
@@ -115,10 +115,10 @@ function updateTray() {
       click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
     },
     { type: "separator" },
-    { label: "Quit EzMonitor Child", click: () => quitApp() },
+    { label: "Quit KidEmonitor Child", click: () => quitApp() },
   ]);
   tray.setContextMenu(menu);
-  tray.setToolTip(`EzMonitor Child — ${label}`);
+  tray.setToolTip(`KidEmonitor Child — ${label}`);
 }
 
 function quitApp() {
@@ -128,7 +128,7 @@ function quitApp() {
 
 function pushStatus() {
   updateTray();
-  mainWindow?.webContents.send("ezmonitor:status", {
+  mainWindow?.webContents.send("kidemonitor:status", {
     state: connectionState,
     parentName: lastParentName,
     isSharing,
@@ -195,7 +195,7 @@ function connectSocket(opts: ConnectOpts): Promise<ConnectResult> {
           message.reason ?? "This device was unpaired by the parent. Set it up again to resume monitoring."
         );
       }
-      mainWindow?.webContents.send("ezmonitor:signal", message);
+      mainWindow?.webContents.send("kidemonitor:signal", message);
     });
 
     socket.on("close", () => {
@@ -325,42 +325,42 @@ app.whenReady().then(() => {
     void attemptReconnect();
   }
 
-  ipcMain.handle("ezmonitor:get-status", () => ({
+  ipcMain.handle("kidemonitor:get-status", () => ({
     state: connectionState,
     parentName: lastParentName,
     isSharing,
     paired: !!currentPairing,
   }));
 
-  ipcMain.handle("ezmonitor:discover-parents", async (_event, familyCode?: string) => {
+  ipcMain.handle("kidemonitor:discover-parents", async (_event, familyCode?: string) => {
     const found: FoundParent[] = [];
     await discoverParents({ familyCode, timeoutMs: 2500 }, (p) => found.push(p));
     return found;
   });
 
-  ipcMain.handle("ezmonitor:pair", async (_event, opts: PairOptions) => pairWithParent(opts));
+  ipcMain.handle("kidemonitor:pair", async (_event, opts: PairOptions) => pairWithParent(opts));
 
-  ipcMain.handle("ezmonitor:unpair", async () => {
+  ipcMain.handle("kidemonitor:unpair", async () => {
     performUnpair();
   });
 
-  ipcMain.handle("ezmonitor:get-screen-source", async () => {
+  ipcMain.handle("kidemonitor:get-screen-source", async () => {
     const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } });
     return sources[0]?.id ?? null;
   });
 
-  ipcMain.on("ezmonitor:send-signal", (_event, message: SignalingMessage) => {
+  ipcMain.on("kidemonitor:send-signal", (_event, message: SignalingMessage) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
     }
   });
 
-  ipcMain.on("ezmonitor:sharing-state", (_event, sharing: boolean) => {
+  ipcMain.on("kidemonitor:sharing-state", (_event, sharing: boolean) => {
     setSharing(sharing);
   });
 
-  ipcMain.handle("ezmonitor:get-launch-at-login", () => app.getLoginItemSettings().openAtLogin);
-  ipcMain.handle("ezmonitor:set-launch-at-login", (_event, enabled: boolean) => {
+  ipcMain.handle("kidemonitor:get-launch-at-login", () => app.getLoginItemSettings().openAtLogin);
+  ipcMain.handle("kidemonitor:set-launch-at-login", (_event, enabled: boolean) => {
     app.setLoginItemSettings({ openAtLogin: enabled });
   });
 

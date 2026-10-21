@@ -1,5 +1,5 @@
 // Plain-JS renderer (no bundler): loaded directly by Chromium via <script type="module">.
-// window.ezmonitor is exposed by ../src/preload/index.ts via contextBridge.
+// window.kidemonitor is exposed by ../src/preload/index.ts via contextBridge.
 
 const el = (id) => document.getElementById(id);
 
@@ -19,13 +19,13 @@ el("scan-btn").addEventListener("click", scanForParents);
 el("pair-btn").addEventListener("click", pair);
 el("unpair-btn").addEventListener("click", unpair);
 launchAtLoginCheckbox.addEventListener("change", () => {
-  window.ezmonitor.setLaunchAtLogin(launchAtLoginCheckbox.checked);
+  window.kidemonitor.setLaunchAtLogin(launchAtLoginCheckbox.checked);
 });
 
 async function scanForParents() {
   foundList.innerHTML = "<li>Scanning…</li>";
   const familyCode = el("family-code").value.trim().toUpperCase();
-  const parents = await window.ezmonitor.discoverParents(familyCode || undefined);
+  const parents = await window.kidemonitor.discoverParents(familyCode || undefined);
   foundList.innerHTML = "";
   if (parents.length === 0) {
     foundList.innerHTML = "<li>No parent devices found. Enter the IP address manually.</li>";
@@ -55,7 +55,7 @@ async function pair() {
   }
 
   pairStatus.textContent = "Pairing…";
-  const result = await window.ezmonitor.pair({ host, port, familyCode, childName });
+  const result = await window.kidemonitor.pair({ host, port, familyCode, childName });
 
   if (!result.accepted) {
     pairStatus.textContent = `Could not pair: ${result.reason ?? "unknown error"}`;
@@ -67,7 +67,7 @@ async function pair() {
 
 async function unpair() {
   await stopSharing();
-  await window.ezmonitor.unpair();
+  await window.kidemonitor.unpair();
 }
 
 function renderStatus(status) {
@@ -100,9 +100,9 @@ function renderStatus(status) {
 
 async function startSharing() {
   try {
-    const sourceId = await window.ezmonitor.getScreenSource();
+    const sourceId = await window.kidemonitor.getScreenSource();
     if (!sourceId) {
-      window.ezmonitor.sendSignal({ type: "consent-response", granted: false, reason: "No screen source available" });
+      window.kidemonitor.sendSignal({ type: "consent-response", granted: false, reason: "No screen source available" });
       return;
     }
 
@@ -126,7 +126,7 @@ async function startSharing() {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        window.ezmonitor.sendSignal({ type: "ice-candidate", candidate: event.candidate.toJSON() });
+        window.kidemonitor.sendSignal({ type: "ice-candidate", candidate: event.candidate.toJSON() });
       }
     };
 
@@ -139,12 +139,12 @@ async function startSharing() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    window.ezmonitor.sendSignal({ type: "consent-response", granted: true });
-    window.ezmonitor.sendSignal({ type: "offer", sdp: offer.sdp });
-    window.ezmonitor.setSharingState(true);
+    window.kidemonitor.sendSignal({ type: "consent-response", granted: true });
+    window.kidemonitor.sendSignal({ type: "offer", sdp: offer.sdp });
+    window.kidemonitor.setSharingState(true);
   } catch (err) {
     console.error("Failed to start sharing", err);
-    window.ezmonitor.sendSignal({
+    window.kidemonitor.sendSignal({
       type: "consent-response",
       granted: false,
       reason: "Screen capture failed (check screen-recording permission)",
@@ -161,7 +161,7 @@ async function stopSharing() {
     currentPc.close();
     currentPc = null;
   }
-  window.ezmonitor.setSharingState(false);
+  window.kidemonitor.setSharingState(false);
 }
 
 async function handleSignal(message) {
@@ -204,14 +204,14 @@ async function handleSignal(message) {
 
 async function init() {
   const [status, launchAtLogin] = await Promise.all([
-    window.ezmonitor.getStatus(),
-    window.ezmonitor.getLaunchAtLogin(),
+    window.kidemonitor.getStatus(),
+    window.kidemonitor.getLaunchAtLogin(),
   ]);
   renderStatus(status);
   launchAtLoginCheckbox.checked = launchAtLogin;
 }
 
-window.ezmonitor.onStatus(renderStatus);
-window.ezmonitor.onSignal(handleSignal);
+window.kidemonitor.onStatus(renderStatus);
+window.kidemonitor.onSignal(handleSignal);
 
 init();

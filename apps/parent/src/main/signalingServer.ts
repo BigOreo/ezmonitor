@@ -6,7 +6,7 @@ import {
   ParentAnnouncer,
   SignalingMessage,
   startParentAnnouncer,
-} from "@ezmonitor/shared";
+} from "@kidemonitor/shared";
 import { WebSocket, WebSocketServer } from "ws";
 
 interface ChildConnection {

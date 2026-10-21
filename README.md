@@ -1,7 +1,9 @@
-# EzMonitor
+# KidEmonitor
 
-A home-network parent/child screen monitoring tool for Windows and macOS,
-built with [Electron](https://www.electronjs.org/). A parent can view what's
+Part of the **KidEsafe** family of products, alongside KidEsafe and
+KidECamper. KidEmonitor is a home-network parent/child screen monitoring
+tool for Windows and macOS, built with
+[Electron](https://www.electronjs.org/). A parent can view what's
 happening on their child's computer in real time, from their own computer,
 as long as both are on the same home network (Wi-Fi/LAN).
 

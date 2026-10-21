@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { listLocalIPv4Addresses } from "@ezmonitor/shared";
+import { listLocalIPv4Addresses } from "@kidemonitor/shared";
 import { BrowserWindow, app, ipcMain } from "electron";
 import { loadOrCreateFamilyCode, regenerateFamilyCode } from "./familyCode";
 import { SignalingServer } from "./signalingServer";
@@ -12,7 +12,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: "EzMonitor Parent",
+    title: "KidEmonitor Parent",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -29,27 +29,27 @@ app.whenReady().then(() => {
   server = new SignalingServer({ parentName, familyCode });
 
   server.on("child-joined", (child) => {
-    mainWindow?.webContents.send("ezmonitor:child-joined", child);
+    mainWindow?.webContents.send("kidemonitor:child-joined", child);
   });
   server.on("child-left", (id: string) => {
-    mainWindow?.webContents.send("ezmonitor:child-left", id);
+    mainWindow?.webContents.send("kidemonitor:child-left", id);
   });
   server.on("child-message", (id: string, message: unknown) => {
-    mainWindow?.webContents.send("ezmonitor:child-message", id, message);
+    mainWindow?.webContents.send("kidemonitor:child-message", id, message);
   });
 
-  ipcMain.on("ezmonitor:send-to-child", (_event, childId: string, message) => {
+  ipcMain.on("kidemonitor:send-to-child", (_event, childId: string, message) => {
     server?.sendToChild(childId, message);
   });
 
-  ipcMain.handle("ezmonitor:get-session-info", () => ({
+  ipcMain.handle("kidemonitor:get-session-info", () => ({
     familyCode: server?.familyCode,
     parentName: server?.parentName,
     port: server?.port,
     addresses: listLocalIPv4Addresses(),
   }));
 
-  ipcMain.handle("ezmonitor:regenerate-family-code", () => {
+  ipcMain.handle("kidemonitor:regenerate-family-code", () => {
     const newCode = regenerateFamilyCode();
     const kicked = server?.regenerateFamilyCode(newCode) ?? 0;
     return { familyCode: newCode, kicked };

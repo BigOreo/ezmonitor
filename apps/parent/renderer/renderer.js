@@ -1,5 +1,5 @@
 // Plain-JS renderer (no bundler): loaded directly by Chromium via <script type="module">.
-// window.ezmonitor is exposed by ../src/preload/index.ts via contextBridge.
+// window.kidemonitor is exposed by ../src/preload/index.ts via contextBridge.
 
 /** @typedef {{id:string,name:string}} ChildInfo */
 
@@ -25,7 +25,7 @@ function renderSessionInfo() {
 }
 
 async function init() {
-  session = await window.ezmonitor.getSessionInfo();
+  session = await window.kidemonitor.getSessionInfo();
   renderSessionInfo();
 }
 
@@ -39,7 +39,7 @@ regenBtn.addEventListener("click", async () => {
   if (!confirmed || !session) return;
 
   regenBtn.disabled = true;
-  const result = await window.ezmonitor.regenerateFamilyCode();
+  const result = await window.kidemonitor.regenerateFamilyCode();
   session.familyCode = result.familyCode;
   renderSessionInfo();
   regenFeedback.textContent =
@@ -115,13 +115,13 @@ function startViewing(childId) {
   entry.statusEl.textContent = "Connecting…";
   entry.statusEl.className = "status";
   entry.viewBtn.disabled = true;
-  window.ezmonitor.sendToChild(childId, { type: "view-request" });
+  window.kidemonitor.sendToChild(childId, { type: "view-request" });
 }
 
 function stopViewing(childId) {
   const entry = children.get(childId);
   if (!entry) return;
-  window.ezmonitor.sendToChild(childId, { type: "stop-viewing" });
+  window.kidemonitor.sendToChild(childId, { type: "stop-viewing" });
   entry.pc?.close();
   entry.pc = null;
   entry.video.srcObject = null;
@@ -154,7 +154,7 @@ function ensurePeerConnection(childId) {
   const pc = new RTCPeerConnection({ iceServers: [] });
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      window.ezmonitor.sendToChild(childId, {
+      window.kidemonitor.sendToChild(childId, {
         type: "ice-candidate",
         candidate: event.candidate.toJSON(),
       });
@@ -197,7 +197,7 @@ async function handleChildMessage(childId, message) {
       await pc.setRemoteDescription({ type: "offer", sdp: message.sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      window.ezmonitor.sendToChild(childId, { type: "answer", sdp: answer.sdp });
+      window.kidemonitor.sendToChild(childId, { type: "answer", sdp: answer.sdp });
       break;
     }
     case "ice-candidate": {
@@ -216,8 +216,8 @@ async function handleChildMessage(childId, message) {
   }
 }
 
-window.ezmonitor.onChildJoined((child) => addChildCard(child));
-window.ezmonitor.onChildLeft((childId) => removeChildCard(childId));
-window.ezmonitor.onChildMessage((childId, message) => handleChildMessage(childId, message));
+window.kidemonitor.onChildJoined((child) => addChildCard(child));
+window.kidemonitor.onChildLeft((childId) => removeChildCard(childId));
+window.kidemonitor.onChildMessage((childId, message) => handleChildMessage(childId, message));
 
 init();

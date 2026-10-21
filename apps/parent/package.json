@@ -1,8 +1,8 @@
 {
-  "name": "@ezmonitor/parent",
+  "name": "@kidemonitor/parent",
   "version": "0.1.0",
-  "description": "EzMonitor Parent — view a paired child device's screen over the home network",
-  "author": "EzMonitor",
+  "description": "KidEmonitor Parent — view a paired child device's screen over the home network",
+  "author": "KidEsafe",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
-    "@ezmonitor/shared": "*",
+    "@kidemonitor/shared": "*",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -27,8 +27,8 @@
     "electronVersion": "32.3.3",
     "npmRebuild": false,
     "publish": null,
-    "appId": "com.ezmonitor.parent",
-    "productName": "EzMonitor Parent",
+    "appId": "com.kidesafe.kidemonitor.parent",
+    "productName": "KidEmonitor Parent",
     "files": [
       "dist/**/*",
       "renderer/**/*",
