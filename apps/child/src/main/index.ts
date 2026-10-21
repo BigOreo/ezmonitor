@@ -4,6 +4,7 @@ import { FoundParent, SignalingMessage, discoverParents } from "@kidemonitor/sha
 import { BrowserWindow, Menu, Tray, app, desktopCapturer, ipcMain, nativeImage } from "electron";
 import WebSocket from "ws";
 import { PairingInfo, clearPairing, loadPairing, savePairing } from "./pairing";
+import { hasConfiguredAutostartOnce, markAutostartConfigured } from "./settings";
 
 type ConnectionState = "unpaired" | "connecting" | "connected" | "reconnecting";
 
@@ -304,9 +305,6 @@ async function pairWithParent(opts: PairOptions): Promise<ConnectResult> {
       parentName: result.parentName,
     };
     savePairing(currentPairing);
-    if (!app.getLoginItemSettings().openAtLogin) {
-      app.setLoginItemSettings({ openAtLogin: true });
-    }
     reconnectDelayMs = RECONNECT_START_MS;
     setConnectionState("connected", result.parentName);
   } else {
@@ -316,64 +314,91 @@ async function pairWithParent(opts: PairOptions): Promise<ConnectResult> {
   return result;
 }
 
-app.whenReady().then(() => {
-  currentPairing = loadPairing();
-  createTray();
-  createWindow(!!currentPairing && app.getLoginItemSettings().wasOpenedAtLogin);
+// Only one instance of this app should ever be running at a time — the
+// OS may try to (re-)launch it on every boot/login regardless of whether
+// a copy is already running in the tray, and a double-launch would try to
+// pair/reconnect twice and fight over the same screen capture. If another
+// instance already holds the lock, hand off to it (surface its window)
+// and quit immediately rather than starting a second one.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  if (currentPairing) {
-    void attemptReconnect();
-  }
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => createWindow(false));
 
-  ipcMain.handle("kidemonitor:get-status", () => ({
-    state: connectionState,
-    parentName: lastParentName,
-    isSharing,
-    paired: !!currentPairing,
-  }));
+  app.whenReady().then(() => {
+    currentPairing = loadPairing();
 
-  ipcMain.handle("kidemonitor:discover-parents", async (_event, familyCode?: string) => {
-    const found: FoundParent[] = [];
-    await discoverParents({ familyCode, timeoutMs: 2500 }, (p) => found.push(p));
-    return found;
-  });
-
-  ipcMain.handle("kidemonitor:pair", async (_event, opts: PairOptions) => pairWithParent(opts));
-
-  ipcMain.handle("kidemonitor:unpair", async () => {
-    performUnpair();
-  });
-
-  ipcMain.handle("kidemonitor:get-screen-source", async () => {
-    const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } });
-    return sources[0]?.id ?? null;
-  });
-
-  ipcMain.on("kidemonitor:send-signal", (_event, message: SignalingMessage) => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+    // "Launch at login" is enabled automatically exactly once, on this
+    // app's very first run ever, regardless of whether pairing has
+    // happened yet — that's what actually makes it "run on system
+    // restart" (there is no OS-level "service" mode compatible with
+    // screen capture; see the README for why). If the user later
+    // disables it via the tray menu, that choice is respected on every
+    // later launch rather than being silently re-enabled.
+    if (!hasConfiguredAutostartOnce()) {
+      app.setLoginItemSettings({ openAtLogin: true });
+      markAutostartConfigured();
     }
+
+    createTray();
+    createWindow(!!currentPairing && app.getLoginItemSettings().wasOpenedAtLogin);
+
+    if (currentPairing) {
+      void attemptReconnect();
+    }
+
+    ipcMain.handle("kidemonitor:get-status", () => ({
+      state: connectionState,
+      parentName: lastParentName,
+      isSharing,
+      paired: !!currentPairing,
+    }));
+
+    ipcMain.handle("kidemonitor:discover-parents", async (_event, familyCode?: string) => {
+      const found: FoundParent[] = [];
+      await discoverParents({ familyCode, timeoutMs: 2500 }, (p) => found.push(p));
+      return found;
+    });
+
+    ipcMain.handle("kidemonitor:pair", async (_event, opts: PairOptions) => pairWithParent(opts));
+
+    ipcMain.handle("kidemonitor:unpair", async () => {
+      performUnpair();
+    });
+
+    ipcMain.handle("kidemonitor:get-screen-source", async () => {
+      const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } });
+      return sources[0]?.id ?? null;
+    });
+
+    ipcMain.on("kidemonitor:send-signal", (_event, message: SignalingMessage) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(message));
+      }
+    });
+
+    ipcMain.on("kidemonitor:sharing-state", (_event, sharing: boolean) => {
+      setSharing(sharing);
+    });
+
+    ipcMain.handle("kidemonitor:get-launch-at-login", () => app.getLoginItemSettings().openAtLogin);
+    ipcMain.handle("kidemonitor:set-launch-at-login", (_event, enabled: boolean) => {
+      app.setLoginItemSettings({ openAtLogin: enabled });
+    });
+
+    app.on("activate", () => createWindow(false));
   });
 
-  ipcMain.on("kidemonitor:sharing-state", (_event, sharing: boolean) => {
-    setSharing(sharing);
+  app.on("before-quit", () => {
+    isQuitting = true;
   });
 
-  ipcMain.handle("kidemonitor:get-launch-at-login", () => app.getLoginItemSettings().openAtLogin);
-  ipcMain.handle("kidemonitor:set-launch-at-login", (_event, enabled: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: enabled });
+  app.on("window-all-closed", () => {
+    // Unlike a typical app, closing the window should not exit — the tray
+    // icon is the visible, always-present indicator that this device is
+    // paired for monitoring. Only an explicit Quit (tray menu) exits.
+    if (isQuitting) app.quit();
   });
-
-  app.on("activate", () => createWindow(false));
-});
-
-app.on("before-quit", () => {
-  isQuitting = true;
-});
-
-app.on("window-all-closed", () => {
-  // Unlike a typical app, closing the window should not exit — the tray
-  // icon is the visible, always-present indicator that this device is
-  // paired for monitoring. Only an explicit Quit (tray menu) exits.
-  if (isQuitting) app.quit();
-});
+}

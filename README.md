@@ -88,16 +88,61 @@ peer-to-peer connection from a single shared screen capture.
 3. Once paired, the child app remembers the pairing (in a local config
    file) and connects automatically — on every future launch, and any time
    the connection drops — with no further action needed on the child's
-   computer. If the parent computer's IP address changes (e.g. a new DHCP
-   lease), the child app re-runs LAN discovery using the stored family code
-   to relocate it.
+   computer. If the parent isn't reachable (offline, or its IP changed —
+   e.g. a new DHCP lease), the child app keeps retrying with exponential
+   backoff (5s up to 60s) forever, re-running LAN discovery on every
+   attempt to relocate the parent if its address changed; there's no
+   give-up condition short of the parent explicitly revoking the pairing
+   (see "Resetting the family code" below).
 4. The child app runs in the background (tray/menu-bar icon) so it's
-   reachable at any time, and can optionally launch automatically at login
-   (toggle in its window, on by default once paired).
+   reachable at any time, and launches automatically at login — enabled
+   by itself exactly once, the very first time the app is ever run (see
+   "Autostart and why there's no 'service' mode" below), and toggleable
+   at any time from its tray menu or window after that. Only one copy of
+   either app ever runs at a time — a second launch (e.g. the OS trying
+   to start it again) just brings the existing one's window forward
+   instead of starting a competing instance.
 5. From the parent app's grid of paired devices, clicking **Start Viewing**
    sends a request to that device, which immediately starts streaming its
    screen (via Electron's `desktopCapturer` + WebRTC) — no interactive
    prompt on the child's side. **Stop Viewing** ends the stream.
+
+### Autostart and why there's no "service" mode
+
+The child app configures itself to launch at login — a per-user startup
+entry (the Windows registry Run key / a macOS `LaunchAgent` / a Linux
+desktop autostart entry, depending on platform, all via Electron's
+built-in `setLoginItemSettings`) — automatically, once, the very first
+time it's ever run. That's the mechanism actually being asked for by
+"run this on restart if it isn't already" in practice, and deliberately
+**not** a true OS-level service (a Windows Service, a macOS
+`LaunchDaemon`, or a Linux system-wide systemd unit):
+
+- A real service runs with no attached user session — on Windows that's
+  session 0, with no desktop; on macOS/Linux a system daemon has no
+  logged-in user's display attached either. Screen capture fundamentally
+  requires an active, logged-in GUI session to capture — there is no
+  "capture the screen" API that works from a sessionless service on any
+  of the three platforms. A child app running as a true service would
+  start up fine and then be unable to ever actually share a screen.
+- A login-based autostart item runs inside the user's own session the
+  moment they log in, which is exactly where screen capture needs to run.
+
+So "starts automatically on every restart" and "can actually capture the
+screen" point to the same answer here, not two different trade-offs.
+If the computer has one normal user account that's always logged in
+shortly after boot (the common case for a kid's own laptop), this is
+indistinguishable in practice from a true auto-starting service. If the
+device sits at a login screen for a while before anyone signs in, the
+child app (and therefore monitoring) only starts once that sign-in
+happens — there's no way around that while screen capture remains a
+requirement.
+
+Combined with the pairing retry loop above and the single-instance lock,
+the practical result is: the app is always either running or about to be
+(at the next login), never duplicated, and never stuck permanently
+disconnected — which is what "runs on restart, keeps trying to find the
+parent" actually cashes out to.
 
 ### Why no per-view consent prompt?
 
