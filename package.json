@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=@kidemonitor/shared && npm run build --workspace=@kidemonitor/parent && npm run build --workspace=@kidemonitor/child",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build --workspace=@kidemonitor/shared && npm run typecheck --workspaces --if-present",
     "start:parent": "npm run start --workspace=@kidemonitor/parent",
     "start:child": "npm run start --workspace=@kidemonitor/child"
   },

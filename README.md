@@ -292,7 +292,50 @@ monorepo and are easy to regress:
 - `win.signAndEditExecutable: false` — without it, electron-builder tries
   to inject the `.exe`'s icon/version resources via a Windows tool run
   through Wine, which needs a full 32-bit Wine prefix and otherwise fails
-  the whole build with "wine is required".
+  the whole build with "wine is required". This is only needed when
+  cross-building Windows installers from Linux (as above); if you're
+  building on the real Windows self-hosted runner described below, this
+  restriction is no longer necessary — remove it (and add a `.ico` via
+  `win.icon`) whenever you want a custom installer icon.
+
+## Continuous integration
+
+Three workflows under `.github/workflows/` run on **self-hosted runners**
+(this repo is private, which is what makes that safe to do — see the note
+below) labeled `kidemonitor` plus the OS (`linux`, `windows`, `macos`):
+
+- **`ci.yml`** — typecheck + build on every push/PR, on the Linux runner.
+  Fast feedback, no packaging involved.
+- **`build-windows.yml`** / **`build-macos.yml`** — build both apps'
+  installers (manually via "Run workflow", or automatically on a `v*` tag
+  push) on the Windows/macOS runners respectively. Because these run on
+  real Windows/macOS hardware (not cross-compiled), they produce proper
+  native installers with no Wine workarounds needed, and are ready for
+  code signing the moment you want it: electron-builder reads signing
+  credentials purely from environment variables on the runner machine
+  (`CSC_LINK`/`CSC_KEY_PASSWORD` for a certificate, plus `APPLE_ID` /
+  `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` for macOS notarization) —
+  nothing in this repo needs to change, and the private key material never
+  has to leave whichever machine you set those variables on.
+
+**Setting up a runner**: in the repo's GitHub settings → Actions →
+Runners → "New self-hosted runner", pick the OS and follow the generated
+download/configure commands on that machine. When prompted for labels
+during `config.sh`/`config.cmd`/`config.ps1`, add `kidemonitor` (the OS
+label is added automatically) so these workflows — and only these —
+target that machine, even if you register other runners for other
+projects later. The runner needs to be running and online for a workflow
+to actually execute; a triggered job just queues (silently, with nothing
+obviously broken) until a matching runner picks it up.
+
+**Why self-hosted runners are fine here, and when that would change**:
+self-hosted runners execute whatever a workflow file says, on your own
+hardware — safe on a private repo where only trusted collaborators can
+trigger workflows, but a real risk on a public repo wired to run on pull
+requests (anyone could open a PR that runs arbitrary code on your
+machine). If this repo is ever made public, reconsider before keeping
+`pull_request` as a trigger on any self-hosted job, and don't add outside
+collaborators while it stays private with these runners attached.
 
 ## Platform notes & permissions
 
