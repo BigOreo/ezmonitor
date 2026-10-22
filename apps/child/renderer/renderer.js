@@ -14,7 +14,7 @@ const launchAtLoginCheckbox = el("launch-at-login");
 
 // A single capture is shared across every concurrent viewer (the parent
 // app's own window, plus any number of browser portal tabs) — each gets
-// its own RTCPeerConnection, but there's only ever one getUserMedia call.
+// its own RTCPeerConnection, but there's only ever one getDisplayMedia call.
 let sharedStream = null;
 /** @type {Map<string, { pc: RTCPeerConnection }>} */
 const sessions = new Map();
@@ -108,17 +108,13 @@ function sendSignal(viewerId, payload) {
 
 async function ensureSharedStream() {
   if (sharedStream) return sharedStream;
-  const sourceId = await window.kidemonitor.getScreenSource();
-  if (!sourceId) return null;
-  sharedStream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: {
-      mandatory: {
-        chromeMediaSource: "desktop",
-        chromeMediaSourceId: sourceId,
-      },
-    },
-  });
+  // Handled on the main-process side by session.defaultSession's
+  // setDisplayMediaRequestHandler (see apps/child/src/main/index.ts),
+  // which auto-picks the first screen with no UI of its own — same
+  // silent-grant behavior as before, now via the non-deprecated API.
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  if (!stream || stream.getVideoTracks().length === 0) return null;
+  sharedStream = stream;
   return sharedStream;
 }
 

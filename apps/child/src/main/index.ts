@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { FoundParent, SignalingMessage, discoverParents } from "@kidemonitor/shared";
-import { BrowserWindow, Menu, Tray, app, desktopCapturer, ipcMain, nativeImage } from "electron";
+import { BrowserWindow, Menu, Tray, app, desktopCapturer, ipcMain, nativeImage, session } from "electron";
 import WebSocket from "ws";
 import { PairingInfo, clearPairing, loadPairing, savePairing } from "./pairing";
 import { hasConfiguredAutostartOnce, markAutostartConfigured } from "./settings";
@@ -342,6 +342,26 @@ if (!gotSingleInstanceLock) {
       markAutostartConfigured();
     }
 
+    // Modern replacement for the legacy desktopCapturer + getUserMedia
+    // mandatory-constraints pattern (still works, but Electron's own docs
+    // mark it outdated). The renderer calls the standard
+    // navigator.mediaDevices.getDisplayMedia() and this handler answers it
+    // in the main process — auto-picking the first screen with no UI of
+    // our own, same silent-grant behavior as before on platforms where
+    // that's achievable. useSystemPicker is deliberately left unset
+    // (defaults to false, and is macOS-only and experimental besides) —
+    // it would show an OS picker on supported systems, which is exactly
+    // the interactive prompt we don't want. On Wayland, this does NOT
+    // bypass a portal permission dialog if one appears: that's enforced
+    // by the compositor/xdg-desktop-portal as a security boundary below
+    // this API, not something any application-level code can opt out of.
+    session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
+        .then((sources) => callback(sources.length > 0 ? { video: sources[0] } : {}))
+        .catch(() => callback({}));
+    });
+
     createTray();
     createWindow(!!currentPairing && app.getLoginItemSettings().wasOpenedAtLogin);
 
@@ -366,11 +386,6 @@ if (!gotSingleInstanceLock) {
 
     ipcMain.handle("kidemonitor:unpair", async () => {
       performUnpair();
-    });
-
-    ipcMain.handle("kidemonitor:get-screen-source", async () => {
-      const sources = await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } });
-      return sources[0]?.id ?? null;
     });
 
     ipcMain.on("kidemonitor:send-signal", (_event, message: SignalingMessage) => {

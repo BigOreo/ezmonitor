@@ -104,8 +104,12 @@ peer-to-peer connection from a single shared screen capture.
    instead of starting a competing instance.
 5. From the parent app's grid of paired devices, clicking **Start Viewing**
    sends a request to that device, which immediately starts streaming its
-   screen (via Electron's `desktopCapturer` + WebRTC) — no interactive
-   prompt on the child's side. **Stop Viewing** ends the stream.
+   screen (captured via `session.defaultSession.setDisplayMediaRequestHandler`
+   in the child's main process, which auto-picks the first screen with no
+   UI of its own, answering the renderer's standard
+   `navigator.mediaDevices.getDisplayMedia()` call) + WebRTC — no
+   interactive prompt from this app on the child's side. **Stop Viewing**
+   ends the stream.
 
 ### Autostart and why there's no "service" mode
 
@@ -399,10 +403,19 @@ collaborators while it stays private with these runners attached.
   through an interactive `xdg-desktop-portal` picker that asks the logged-in
   user which screen/window to share, **every time** — which runs directly
   against this project's "no interactive prompt on the child's side"
-  design principle. This hasn't been exercised on a real Wayland session
-  as part of this work; treat child-side capture on Wayland as unverified
-  until tested, and don't assume it'll be silent the way X11/Windows/macOS
-  are.
+  design principle. The child app uses the modern, non-deprecated capture
+  API (`session.defaultSession.setDisplayMediaRequestHandler`, see
+  `apps/child/src/main/index.ts`) rather than the legacy
+  `chromeMediaSource`/mandatory-constraints pattern, which is the correct
+  long-term API regardless of platform — **but this is not expected to
+  change whether a Wayland portal dialog appears**: on Wayland, that
+  dialog is the compositor/portal's own security boundary, enforced below
+  Electron's API surface, not something any application-level code
+  (ours or Electron's) can silently bypass — the whole point of portals is
+  that a sandboxed app can't self-grant access to something this
+  sensitive. This hasn't been exercised on a real Wayland session as part
+  of this work; treat child-side capture on Wayland as unverified until
+  tested, and don't assume it'll be silent the way X11/Windows/macOS are.
 
 ## Known limitations / suggested next steps
 

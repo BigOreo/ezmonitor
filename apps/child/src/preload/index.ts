@@ -35,8 +35,6 @@ const api = {
   pair: (opts: PairOptions): Promise<PairResult> => ipcRenderer.invoke("kidemonitor:pair", opts),
   unpair: (): Promise<void> => ipcRenderer.invoke("kidemonitor:unpair"),
 
-  getScreenSource: (): Promise<string | null> => ipcRenderer.invoke("kidemonitor:get-screen-source"),
-
   sendSignal: (message: SignalingMessage) => ipcRenderer.send("kidemonitor:send-signal", message),
   onSignal: (cb: (message: SignalingMessage) => void) => {
     ipcRenderer.on("kidemonitor:signal", (_event, message) => cb(message));
