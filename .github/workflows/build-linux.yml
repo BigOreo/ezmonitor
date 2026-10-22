@@ -1,0 +1,43 @@
+name: Build Linux installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: kidemonitor-linux
+    strategy:
+      matrix:
+        app: [parent, child]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build shared package
+        run: npm run build --workspace=@kidemonitor/shared
+
+      - name: Build ${{ matrix.app }} installer
+        run: npm run dist:linux
+        working-directory: apps/${{ matrix.app }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kidemonitor-${{ matrix.app }}-linux
+          path: |
+            apps/${{ matrix.app }}/release/*.AppImage
+            apps/${{ matrix.app }}/release/*.deb
+
+      - name: Back up installer to OneDrive
+        run: >
+          rclone copy apps/${{ matrix.app }}/release "onedrive:kidemonitor builds"
+          --include "*.AppImage" --include "*.deb"
+        continue-on-error: true

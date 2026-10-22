@@ -2,7 +2,7 @@
 
 Part of the **KidEsafe** family of products, alongside KidEsafe and
 KidECamper. KidEmonitor is a home-network parent/child screen monitoring
-tool for Windows and macOS, built with
+tool for Windows, macOS, and Linux, built with
 [Electron](https://www.electronjs.org/). A parent can view what's
 happening on their child's computer in real time, from their own computer,
 as long as both are on the same home network (Wi-Fi/LAN).
@@ -251,8 +251,9 @@ a native installer:
 
 ```bash
 # from apps/parent or apps/child
-npm run dist:win   # produces an NSIS .exe installer under release/
-npm run dist:mac   # produces a .dmg under release/
+npm run dist:win     # produces an NSIS .exe installer under release/
+npm run dist:mac     # produces a .dmg under release/
+npm run dist:linux   # produces an AppImage and a .deb under release/
 ```
 
 Cross-building a real `.dmg` requires running on a Mac — DMG creation
@@ -280,7 +281,7 @@ Unzip it and right-click → Open the first time (macOS Gatekeeper blocks an
 unsigned/unnotarized app by default on a plain double-click) — this is
 expected for any unsigned build, not specific to this project.
 
-Two package.json `build` settings matter a lot in this npm-workspaces
+A few package.json `build` settings matter a lot in this npm-workspaces
 monorepo and are easy to regress:
 
 - `npmRebuild: false` — without it, electron-builder's packaging step runs
@@ -297,6 +298,16 @@ monorepo and are easy to regress:
   building on the real Windows self-hosted runner described below, this
   restriction is no longer necessary — remove it (and add a `.ico` via
   `win.icon`) whenever you want a custom installer icon.
+- `linux.artifactName: "${productName}-${version}-${arch}.${ext}"` —
+  without it, the `.deb` target derives its output filename from the npm
+  package name (`@kidemonitor/parent`), and the `/` in the scope gets
+  read as a path separator — electron-builder then tries to write into a
+  `release/@kidemonitor/` directory that doesn't exist and the build
+  fails outright (confirmed by actually building it in this sandbox,
+  since unlike macOS/Windows this one needs no cross-compilation
+  workaround — it's genuinely Linux here too). The `AppImage` target
+  isn't affected (it already defaults to `productName`); this override
+  just makes both consistent.
 
 ## Continuous integration
 
@@ -306,11 +317,14 @@ below), one labeled `kidemonitor-linux`, `kidemonitor-windows`, or
 `kidemonitor-macos` per workflow:
 
 - **`ci.yml`** — typecheck + build on every push/PR, on the Linux runner.
-  Fast feedback, no packaging involved.
-- **`build-windows.yml`** / **`build-macos.yml`** — build both apps'
-  installers (manually via "Run workflow", or automatically on a `v*` tag
-  push) on the Windows/macOS runners respectively. Because these run on
-  real Windows/macOS hardware (not cross-compiled), they produce proper
+  Fast feedback, no packaging involved. Shares a runner machine with
+  `build-linux.yml` below, so the two queue behind each other rather than
+  running in parallel if both get triggered around the same time (e.g. a
+  tag push, which is a `push` event for both).
+- **`build-windows.yml`** / **`build-macos.yml`** / **`build-linux.yml`**
+  — build both apps' installers (manually via "Run workflow", or
+  automatically on a `v*` tag push) on the matching runner. Because these
+  run on the real target OS (not cross-compiled), they produce proper
   native installers with no Wine workarounds needed, and are ready for
   code signing the moment you want it: electron-builder reads signing
   credentials purely from environment variables on the runner machine
@@ -378,17 +392,33 @@ collaborators while it stays private with these runners attached.
   subnet. If a router segments devices into different networks (e.g. a
   guest Wi-Fi band), discovery will fail — the child app can still be
   paired using the parent's IP address entered manually.
+- **Linux, and specifically Wayland**: packaged as an `AppImage` (portable,
+  no install) and a `.deb`. On X11 desktops, screen capture behaves like
+  Windows/macOS — fully automatic, no prompt. On **Wayland** (the default
+  on current Ubuntu/Fedora/GNOME), Chromium's screen capture normally goes
+  through an interactive `xdg-desktop-portal` picker that asks the logged-in
+  user which screen/window to share, **every time** — which runs directly
+  against this project's "no interactive prompt on the child's side"
+  design principle. This hasn't been exercised on a real Wayland session
+  as part of this work; treat child-side capture on Wayland as unverified
+  until tested, and don't assume it'll be silent the way X11/Windows/macOS
+  are.
 
 ## Known limitations / suggested next steps
 
 - This development sandbox is a headless Linux container with no display,
-  so the Electron GUIs and the browser portal's actual in-browser WebRTC
-  flow could not be interactively tested here — only `tsc` type-checking,
-  `npm run build`, Node syntax validation of the compiled output, and (for
-  the signaling server's new multi-viewer routing specifically) a
-  standalone Node script exercising the real WebSocket/HTTP server
-  end-to-end were run. **Please test the actual pairing, background
-  reconnect, browser portal, and live video flow on real Windows/Mac
+  so none of the Electron GUIs, the browser portal's actual in-browser
+  WebRTC flow, or real screen capture (Wayland vs. X11 included) could be
+  interactively tested here — only `tsc` type-checking, `npm run build`,
+  Node syntax validation of the compiled output, and (for the signaling
+  server's new multi-viewer routing specifically) a standalone Node script
+  exercising the real WebSocket/HTTP server end-to-end were run. The
+  Linux `.deb`/`AppImage` packaging itself **was** verified for real here,
+  since this sandbox's own Linux is genuine (not cross-compiled) — both
+  built successfully and were spot-checked (file type, `.deb` metadata,
+  bundled assets). **Please test the actual pairing, background
+  reconnect, browser portal, and live video flow — including a real
+  Wayland session for the child app — on real Windows/Mac/Linux
   machines** before relying on this.
 - No reconnect notification/history — the parent app doesn't currently log
   when a child device went offline/came back, just its live state.
