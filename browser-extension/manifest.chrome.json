@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "KidEmonitor Browsing Activity",
+  "version": "0.1.0",
+  "description": "Reports which sites are visited and for how long to the KidEmonitor Child app running on this same computer, for a parent to review in KidEmonitor.",
+  "permissions": ["tabs", "idle", "alarms", "storage"],
+  "host_permissions": ["http://127.0.0.1:41237/*"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

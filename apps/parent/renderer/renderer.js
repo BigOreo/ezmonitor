@@ -94,6 +94,7 @@ function addChildCard(info) {
       <button class="view-btn">Start Viewing</button>
       <button class="stop-btn secondary" disabled>Stop Viewing</button>
       <button class="fullscreen-btn secondary" disabled>Fullscreen</button>
+      <button class="activity-btn secondary">Browsing Activity</button>
     </div>
   `;
   card.querySelector(".name").textContent = info.name;
@@ -108,11 +109,13 @@ function addChildCard(info) {
     viewBtn: card.querySelector(".view-btn"),
     stopBtn: card.querySelector(".stop-btn"),
     fullscreenBtn: card.querySelector(".fullscreen-btn"),
+    activityBtn: card.querySelector(".activity-btn"),
   };
 
   entry.viewBtn.addEventListener("click", () => startViewing(info.id));
   entry.stopBtn.addEventListener("click", () => stopViewing(info.id));
   entry.fullscreenBtn.addEventListener("click", () => toggleFullscreen(info.id));
+  entry.activityBtn.addEventListener("click", () => openActivityModal(info.id, info.name));
   entry.video.addEventListener("dblclick", () => toggleFullscreen(info.id));
   entry.video.addEventListener("fullscreenchange", () => {
     entry.fullscreenBtn.textContent = document.fullscreenElement === entry.video ? "Exit Fullscreen" : "Fullscreen";
@@ -236,6 +239,59 @@ async function handleChildMessage(childId, message) {
     default:
       break;
   }
+}
+
+const activityModal = document.getElementById("activity-modal");
+const activityChildName = document.getElementById("activity-child-name");
+const activityBody = document.getElementById("activity-body");
+document.getElementById("activity-close-btn").addEventListener("click", () => activityModal.classList.add("hidden"));
+activityModal.addEventListener("click", (event) => {
+  if (event.target === activityModal) activityModal.classList.add("hidden");
+});
+
+function formatDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function renderActivityTable(visits) {
+  if (visits.length === 0) {
+    activityBody.innerHTML = '<p class="hint">No browsing activity recorded yet for this device.</p>';
+    return;
+  }
+  const rows = [...visits]
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .map(
+      (v) => `
+      <tr>
+        <td>${escapeHtml(new Date(v.startedAt).toLocaleString())}</td>
+        <td><span class="domain">${escapeHtml(v.domain)}</span><br><span class="title">${escapeHtml(v.title || v.url)}</span></td>
+        <td>${formatDuration(v.durationMs)}</td>
+        <td>${escapeHtml(v.browser)}</td>
+      </tr>`
+    )
+    .join("");
+  activityBody.innerHTML = `
+    <table class="activity-table">
+      <thead>
+        <tr><th>When</th><th>Site</th><th>Duration</th><th>Browser</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function openActivityModal(childId, childName) {
+  activityChildName.textContent = childName;
+  activityBody.innerHTML = '<p class="hint">Loading…</p>';
+  activityModal.classList.remove("hidden");
+  const visits = await window.kidemonitor.getBrowsingActivity(childId);
+  renderActivityTable(visits);
 }
 
 window.kidemonitor.onChildJoined((child) => addChildCard(child));

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { FoundParent, SignalingMessage, discoverParents } from "@kidemonitor/shared";
+import { BrowsingVisit, FoundParent, SignalingMessage, discoverParents } from "@kidemonitor/shared";
 import { BrowserWindow, Menu, Tray, app, desktopCapturer, ipcMain, nativeImage, session } from "electron";
 import WebSocket from "ws";
+import { BrowsingIngestServer } from "./browsingIngest";
 import { PairingInfo, clearPairing, loadPairing, savePairing } from "./pairing";
 import { hasConfiguredAutostartOnce, markAutostartConfigured } from "./settings";
 
@@ -31,6 +32,8 @@ interface PairOptions {
 
 const RECONNECT_START_MS = 5000;
 const RECONNECT_MAX_MS = 60000;
+const BROWSING_FLUSH_INTERVAL_MS = 60000;
+const MAX_QUEUED_VISITS = 2000;
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -44,6 +47,18 @@ let connectionState: ConnectionState = "unpaired";
 let lastParentName = "";
 let lastMessage = "";
 let isSharing = false;
+
+// Reported by the browser extension via BrowsingIngestServer, queued here
+// (rather than inside that server) since this module already tracks the
+// connection state needed to know when forwarding to the parent is
+// possible. Capped so a long stretch offline can't grow this unboundedly.
+let browsingQueue: BrowsingVisit[] = [];
+
+function flushBrowsingQueue() {
+  if (browsingQueue.length === 0 || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "browsing-activity", visits: browsingQueue }));
+  browsingQueue = [];
+}
 
 function createWindow(startHidden: boolean) {
   if (mainWindow) {
@@ -284,6 +299,7 @@ async function attemptReconnect(): Promise<void> {
   if (result.accepted) {
     reconnectDelayMs = RECONNECT_START_MS;
     setConnectionState("connected", result.parentName ?? pairing.parentName);
+    flushBrowsingQueue();
   } else {
     scheduleReconnect();
   }
@@ -307,6 +323,7 @@ async function pairWithParent(opts: PairOptions): Promise<ConnectResult> {
     savePairing(currentPairing);
     reconnectDelayMs = RECONNECT_START_MS;
     setConnectionState("connected", result.parentName);
+    flushBrowsingQueue();
   } else {
     setConnectionState(currentPairing ? "reconnecting" : "unpaired");
   }
@@ -368,6 +385,18 @@ if (!gotSingleInstanceLock) {
     if (currentPairing) {
       void attemptReconnect();
     }
+
+    // Localhost-only ingestion endpoint for the browser extension
+    // (browser-extension/) — see browsingIngest.ts for why it's
+    // deliberately unauthenticated and loopback-bound rather than LAN-wide.
+    const browsingIngest = new BrowsingIngestServer();
+    browsingIngest.on("visit", (visit: BrowsingVisit) => {
+      browsingQueue.push(visit);
+      if (browsingQueue.length > MAX_QUEUED_VISITS) {
+        browsingQueue.splice(0, browsingQueue.length - MAX_QUEUED_VISITS);
+      }
+    });
+    setInterval(flushBrowsingQueue, BROWSING_FLUSH_INTERVAL_MS);
 
     ipcMain.handle("kidemonitor:get-status", () => ({
       state: connectionState,

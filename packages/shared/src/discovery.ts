@@ -5,6 +5,17 @@ import { networkInterfaces } from "node:os";
 export const DISCOVERY_PORT = 41234;
 /** Default TCP port for the parent app's WebSocket signaling server. */
 export const DEFAULT_SIGNALING_PORT = 41235;
+/**
+ * Localhost-only TCP port the child app listens on for the browser
+ * extension (browser-extension/) to POST visit reports to. This is NOT
+ * reachable over the network (the child app binds it to 127.0.0.1 only) —
+ * it exists purely so a browser extension running on the same machine can
+ * hand off data to the app without native-messaging-host registration.
+ * The extension can't import this constant (it isn't an npm package), so
+ * its background.js hardcodes the same number — keep both in sync if this
+ * ever changes.
+ */
+export const BROWSING_INGEST_PORT = 41237;
 
 interface DiscoverWireMessage {
   type: "kidemonitor-discover";

@@ -113,6 +113,49 @@ export interface ChildLeftMessage {
   childId: string;
 }
 
+/** One page visit, reported by the browser extension running on the child's machine via the child app's local ingestion endpoint. */
+export interface BrowsingVisit {
+  url: string;
+  domain: string;
+  title: string;
+  browser: "chrome" | "edge" | "firefox" | "safari";
+  /** Epoch ms. */
+  startedAt: number;
+  /** Epoch ms. */
+  endedAt: number;
+  durationMs: number;
+}
+
+/**
+ * Child -> parent only (never relayed to a viewer, unlike the per-session
+ * messages above). A batch of visits accumulated since the last report,
+ * sent over the same persistent connection used for signaling. The parent
+ * stores these; it does not relay them anywhere automatically.
+ */
+export interface BrowsingActivityReport {
+  type: "browsing-activity";
+  visits: BrowsingVisit[];
+}
+
+/**
+ * Browser portal only (the parent app's own renderer queries the main
+ * process directly over IPC instead). Asks the parent for a child's
+ * stored browsing history; `since` (epoch ms) limits it to visits that
+ * started at or after that time, omit for everything still retained.
+ */
+export interface GetBrowsingActivity {
+  type: "get-browsing-activity";
+  childId: string;
+  since?: number;
+}
+
+/** Parent's answer to GetBrowsingActivity, sent only to the requesting viewer. */
+export interface BrowsingActivityHistory {
+  type: "browsing-activity-history";
+  childId: string;
+  visits: BrowsingVisit[];
+}
+
 export type SignalingMessage =
   | JoinAck
   | ViewRequest
@@ -124,4 +167,7 @@ export type SignalingMessage =
   | KickedMessage
   | ChildrenListMessage
   | ChildJoinedMessage
-  | ChildLeftMessage;
+  | ChildLeftMessage
+  | BrowsingActivityReport
+  | GetBrowsingActivity
+  | BrowsingActivityHistory;

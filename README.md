@@ -212,6 +212,132 @@ generates and persists a brand new one:
 - Re-pairing after a reset is the same one-time setup flow as the first
   pairing.
 
+## Browsing activity
+
+Alongside live screen viewing, the parent can review which sites a child
+device visited, when, and for how long — shown as a per-device table in
+both the parent app (a **Browsing Activity** button on each child's card)
+and the browser portal. This is a materially more sensitive feature than
+live viewing: live viewing is momentary and this project doesn't record
+it, while browsing activity is a **persistent, searchable history** —
+treat the data this produces accordingly (see Security notes below).
+
+### How it's captured
+
+Reading "which sites were visited" isn't something the child app can see
+on its own — the browser itself has to report it. This happens via a
+small **browser extension** (`browser-extension/`, not an npm package —
+it's loaded directly into each browser) that watches which domain is in
+the *focused window's active tab* and for how long, using the
+WebExtensions `tabs`/`windows`/`idle` APIs for real tab-focus and idle
+tracking (not just a periodic guess from browser history), and reports
+each completed visit to the child app.
+
+```
+┌───────────────┐  POST /report-visit   ┌─────────────┐  "browsing-activity"  ┌─────────────┐
+│ Browser        │ ────(localhost only)─▶│ Child app   │ ──(existing WS conn)─▶│ Parent app  │
+│ extension      │                       │             │                       │  (stores)   │
+└───────────────┘                        └─────────────┘                       └──────┬──────┘
+                                                                                        │
+                                                      "get-browsing-activity" (portal)  │
+                                              ◀────────────────────────────────────────┘
+                                              "browsing-activity-history"
+```
+
+- The extension POSTs each visit to `http://127.0.0.1:41237/report-visit`
+  — a plain HTTP server the child app runs, bound to `127.0.0.1` only
+  (see `apps/child/src/main/browsingIngest.ts`). This is **not** reachable
+  from the network, only from other processes on that same machine; it
+  exists purely so the extension (which can't use Node-style native
+  messaging without a lot more per-browser plumbing) has a simple way to
+  hand data to the app.
+- The child app validates and queues what it receives, then forwards
+  batches to the parent over the **same persistent connection** already
+  used for pairing/signaling — no new connection, no new port on the
+  parent side.
+- The parent stores it (`apps/parent/src/main/browsingStore.ts`, a flat
+  JSON file per the same pattern as `pairing.json`/`family-code.json`
+  elsewhere in this project — no database, this is modest-volume
+  single-household data) and prunes anything older than **30 days** on
+  every write.
+- The parent app's own renderer reads it via IPC; the browser portal asks
+  over its existing WebSocket connection (`get-browsing-activity` /
+  `browsing-activity-history` — see the protocol doc comment in
+  `packages/shared/src/protocol.ts`). Either way, this is a pull: opening
+  the "Browsing Activity" panel fetches the current data, it doesn't
+  auto-refresh while open.
+
+### Browser coverage
+
+**Chrome, Edge, and Firefox** are covered by the one extension in
+`browser-extension/` (two manifests, Chrome/Edge sharing one since both
+are Chromium-based) — see that folder's README for how to load it
+(developer/temporary-add-on mode; it has not been published or signed).
+
+**Safari is not covered.** Safari extensions have to be built as a native
+macOS app extension in Xcode — fundamentally different packaging from
+Chrome/Firefox's "load a folder of JS and a manifest," and Xcode only
+runs on macOS. This could not be built in the Linux sandbox this project
+was developed in. `browser-extension/background.js` was written to
+minimize rework later (the APIs it uses are also present in Safari Web
+Extensions), but the actual Xcode project, its build, and its testing all
+need a real Mac.
+
+**Nothing here makes the extension install automatically or resist
+removal.** Doing that means either publishing it (Chrome Web Store /
+Mozilla AMO — review processes, developer accounts, small fees) or
+pushing it via enterprise policy (a registry key on Windows, a
+configuration profile on macOS) to the specific child device. Both are
+deployment decisions with real costs, not something building the
+extension itself settles.
+
+### Security notes
+
+- The `127.0.0.1:41237` endpoint is **intentionally unauthenticated** —
+  any process on the child's own machine can POST a fabricated visit to
+  it, not just the extension. This is a conscious tradeoff, not an
+  oversight: binding to loopback already blocks the entire LAN from
+  reaching it, and defending further would mean building a credential
+  handshake between the extension and the app for not much real benefit —
+  exploiting this already requires code execution on the child's own
+  machine, at which point there are much bigger problems than one
+  endpoint accepting fake visit reports.
+- The stored history is a **plain, unencrypted JSON file** on the
+  parent's disk, same as the other small config files this project
+  writes (pairing info, the family code). Anyone with access to the
+  parent's user account can read it directly, bypassing the app
+  entirely. If the family code ever leaks, a LAN-based attacker gets
+  live viewing *and*, through the browser portal, a 30-day browsing
+  history — not just a moment of screen access. Resetting the family code
+  (above) cuts off further access but does not retroactively protect
+  history already pulled before the reset.
+- `durationMs` is an **estimate** from tab-focus/idle tracking, not a
+  forensic measurement — browser-extension event timing, service-worker
+  restarts, and system sleep/wake can all introduce small gaps or
+  overlaps. Treat it as "roughly how long," not an exact figure.
+
+### What's verified and what isn't
+
+The signaling-server routing (a child's `browsing-activity` report
+reaching the parent's store and *not* leaking to any viewer; a portal
+viewer's `get-browsing-activity` query being answered directly rather
+than relayed to the child; an unknown child returning an empty list
+rather than an error) and the ingestion server's request validation
+(accepts a well-formed visit, rejects malformed JSON, missing fields, an
+unrecognized browser value, a negative or implausibly large duration, and
+anything that isn't a POST to `/report-visit`) were all exercised for
+real with a standalone Node script driving the actual compiled modules
+over real HTTP/WebSocket connections — the same kind of check used
+earlier in this project for the multi-viewer signaling work.
+
+**Not verified**, because it needs a real browser and this sandbox has
+none: the extension's actual tab-tracking behavior, the UI rendering in
+either app, and the full end-to-end flow from a real page visit to a row
+appearing in the Browsing Activity table. Test this by loading the
+extension (its folder's README has the steps), browsing a few sites with
+a paired child device, and checking that what shows up in the parent
+app/portal matches what was actually done.
+
 ## Repository layout
 
 ```
@@ -219,6 +345,7 @@ packages/shared/           Protocol types + LAN discovery (UDP) helpers, used by
 apps/parent/                Parent Electron app (main process, preload, renderer)
 apps/parent/browser-viewer/ The browser portal's static page, served by the parent app's own HTTP server
 apps/child/                 Child Electron app (main process, preload, renderer, tray icon asset)
+browser-extension/          Chrome/Edge/Firefox extension that reports browsing activity to the child app
 ```
 
 Each app's `src/main` and `src/preload` are TypeScript, compiled with `tsc`
@@ -442,3 +569,12 @@ collaborators while it stays private with these runners attached.
 - Auto-update and code signing/notarization for the installers are not
   yet set up (CI build pipelines for Windows/macOS installers are, under
   `.github/workflows/`).
+- Browsing activity: no Safari support (needs Xcode on a real Mac, see
+  the "Browsing activity" section above), no automatic/resistant-to-removal
+  extension install (needs store publishing or enterprise policy
+  deployment, a separate decision with its own costs), and the extension
+  itself hasn't been run in a real browser as part of this work — only
+  its server-side counterparts were verified. Durations are estimates,
+  not forensic measurements, and the resulting history is stored
+  unencrypted on the parent's disk — see that section's "Security notes"
+  before treating this as a strong-security feature.

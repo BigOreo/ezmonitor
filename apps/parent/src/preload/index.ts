@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ChildInfo, SignalingMessage } from "@kidemonitor/shared";
+import type { BrowsingVisit, ChildInfo, SignalingMessage } from "@kidemonitor/shared";
 
 export interface SessionInfo {
   familyCode: string;
@@ -28,6 +28,9 @@ const api = {
 
   regenerateFamilyCode: (): Promise<{ familyCode: string; kicked: number }> =>
     ipcRenderer.invoke("kidemonitor:regenerate-family-code"),
+
+  getBrowsingActivity: (childId: string, since?: number): Promise<BrowsingVisit[]> =>
+    ipcRenderer.invoke("kidemonitor:get-browsing-activity", childId, since),
 };
 
 export type KidEmonitorParentApi = typeof api;

@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { listLocalIPv4Addresses } from "@kidemonitor/shared";
 import { BrowserWindow, app, ipcMain } from "electron";
+import * as browsingStore from "./browsingStore";
 import { loadOrCreateFamilyCode, regenerateFamilyCode } from "./familyCode";
 import { SignalingServer } from "./signalingServer";
 
@@ -45,7 +46,12 @@ if (!gotSingleInstanceLock) {
     const parentName = os.hostname();
     const familyCode = loadOrCreateFamilyCode();
     const browserViewerDir = path.join(__dirname, "../../browser-viewer");
-    server = new SignalingServer({ parentName, familyCode, browserViewerDir });
+    server = new SignalingServer({
+      parentName,
+      familyCode,
+      browserViewerDir,
+      onGetBrowsingActivity: (childId, since) => browsingStore.getVisits(childId, since),
+    });
 
     server.on("child-joined", (child) => {
       mainWindow?.webContents.send("kidemonitor:child-joined", child);
@@ -55,6 +61,9 @@ if (!gotSingleInstanceLock) {
     });
     server.on("child-message", (id: string, message: unknown) => {
       mainWindow?.webContents.send("kidemonitor:child-message", id, message);
+    });
+    server.on("browsing-activity", (childId: string, visits) => {
+      browsingStore.addVisits(childId, visits);
     });
 
     ipcMain.on("kidemonitor:send-to-child", (_event, childId: string, message) => {
@@ -80,6 +89,10 @@ if (!gotSingleInstanceLock) {
       const kicked = server?.regenerateFamilyCode(newCode) ?? 0;
       return { familyCode: newCode, kicked };
     });
+
+    ipcMain.handle("kidemonitor:get-browsing-activity", (_event, childId: string, since?: number) =>
+      browsingStore.getVisits(childId, since)
+    );
 
     createWindow();
 

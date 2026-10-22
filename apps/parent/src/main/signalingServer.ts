@@ -3,6 +3,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import {
+  BrowsingVisit,
   ChildInfo,
   ConsentResponse,
   DEFAULT_SIGNALING_PORT,
@@ -74,13 +75,22 @@ export class SignalingServer extends EventEmitter {
   private readonly children = new Map<string, ChildConnection>();
   private readonly viewers = new Map<string, ViewerConnection>();
   private readonly browserViewerDir: string;
+  private readonly onGetBrowsingActivity?: (childId: string, since?: number) => BrowsingVisit[];
 
-  constructor(opts: { parentName: string; familyCode: string; port?: number; browserViewerDir: string }) {
+  constructor(opts: {
+    parentName: string;
+    familyCode: string;
+    port?: number;
+    browserViewerDir: string;
+    /** Answers a browser portal viewer's GetBrowsingActivity request (the parent app's own renderer queries the store directly over IPC instead, bypassing this entirely). */
+    onGetBrowsingActivity?: (childId: string, since?: number) => BrowsingVisit[];
+  }) {
     super();
     this.parentName = opts.parentName;
     this._familyCode = opts.familyCode;
     this.port = opts.port ?? DEFAULT_SIGNALING_PORT;
     this.browserViewerDir = opts.browserViewerDir;
+    this.onGetBrowsingActivity = opts.onGetBrowsingActivity;
 
     this.httpServer = http.createServer();
     this.httpServer.on("request", (req, res) => this.serveStaticFile(req, res));
@@ -174,6 +184,13 @@ export class SignalingServer extends EventEmitter {
         return;
       }
 
+      // Browsing-activity reports are data for the parent to store, never
+      // relayed to any viewer (unlike everything else a child sends).
+      if (message.type === "browsing-activity") {
+        this.emit("browsing-activity", childId, message.visits);
+        return;
+      }
+
       // A message tagged for a specific (non-local) viewer is relayed
       // straight to that browser portal session; everything else (the
       // untagged/local case, plus one-off events with no per-session
@@ -229,6 +246,13 @@ export class SignalingServer extends EventEmitter {
       } catch {
         return;
       }
+
+      if (message.type === "get-browsing-activity") {
+        const visits = this.onGetBrowsingActivity?.(message.childId, message.since) ?? [];
+        this.sendTo(ws, { type: "browsing-activity-history", childId: message.childId, visits });
+        return;
+      }
+
       if (!isRoutable(message) || !message.childId) return;
       const { childId, ...rest } = message;
       this.sendToChild(childId, { ...rest, viewerId } as SignalingMessage);

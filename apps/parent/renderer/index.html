@@ -23,6 +23,18 @@
         into the KidEmonitor Child app once, on the device you want to monitor.
       </p>
     </main>
+
+    <div id="activity-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Browsing activity &mdash; <span id="activity-child-name"></span></h2>
+          <button id="activity-close-btn" class="secondary small">Close</button>
+        </div>
+        <p class="hint">Last 30 days, newest first. Durations are estimated from the browser extension's tab-focus tracking.</p>
+        <div id="activity-body"></div>
+      </div>
+    </div>
+
     <script type="module" src="renderer.js"></script>
   </body>
 </html>
