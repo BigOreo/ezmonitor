@@ -33,3 +33,7 @@ jobs:
         with:
           name: kidemonitor-${{ matrix.app }}-windows
           path: apps/${{ matrix.app }}/release/*.exe
+
+      - name: Back up installer to OneDrive
+        run: rclone copy apps/${{ matrix.app }}/release "onedrive:kidemonitor builds" --include "*.exe"
+        continue-on-error: true

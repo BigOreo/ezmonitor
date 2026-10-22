@@ -317,7 +317,17 @@ below), one labeled `kidemonitor-linux`, `kidemonitor-windows`, or
   (`CSC_LINK`/`CSC_KEY_PASSWORD` for a certificate, plus `APPLE_ID` /
   `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` for macOS notarization) —
   nothing in this repo needs to change, and the private key material never
-  has to leave whichever machine you set those variables on.
+  has to leave whichever machine you set those variables on. Each also
+  copies its installer to OneDrive (`rclone copy ... "onedrive:kidemonitor
+  builds"`) right after the GitHub Actions upload, as a backup outside
+  GitHub's own artifact storage quota — this step is best-effort
+  (`continue-on-error: true`) so a transient rclone/OneDrive hiccup
+  doesn't fail an otherwise-good build. It assumes rclone and its
+  `onedrive` remote are already set up on the runner machine (true on the
+  machines this was set up on, since they already run rclone for a
+  sibling repo) — if you point these workflows at a fresh runner that's
+  never had rclone configured, this step will just fail harmlessly until
+  you run `rclone config` there.
 
 **Setting up a runner**: in the repo's GitHub settings → Actions →
 Runners → "New self-hosted runner", pick the OS and follow the generated

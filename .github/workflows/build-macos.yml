@@ -33,3 +33,7 @@ jobs:
         with:
           name: kidemonitor-${{ matrix.app }}-macos
           path: apps/${{ matrix.app }}/release/*.dmg
+
+      - name: Back up installer to OneDrive
+        run: rclone copy apps/${{ matrix.app }}/release "onedrive:kidemonitor builds" --include "*.dmg"
+        continue-on-error: true
