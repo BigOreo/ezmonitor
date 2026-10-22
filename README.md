@@ -302,7 +302,8 @@ monorepo and are easy to regress:
 
 Three workflows under `.github/workflows/` run on **self-hosted runners**
 (this repo is private, which is what makes that safe to do — see the note
-below) labeled `kidemonitor` plus the OS (`linux`, `windows`, `macos`):
+below), one labeled `kidemonitor-linux`, `kidemonitor-windows`, or
+`kidemonitor-macos` per workflow:
 
 - **`ci.yml`** — typecheck + build on every push/PR, on the Linux runner.
   Fast feedback, no packaging involved.
@@ -321,12 +322,27 @@ below) labeled `kidemonitor` plus the OS (`linux`, `windows`, `macos`):
 **Setting up a runner**: in the repo's GitHub settings → Actions →
 Runners → "New self-hosted runner", pick the OS and follow the generated
 download/configure commands on that machine. When prompted for labels
-during `config.sh`/`config.cmd`/`config.ps1`, add `kidemonitor` (the OS
-label is added automatically) so these workflows — and only these —
-target that machine, even if you register other runners for other
-projects later. The runner needs to be running and online for a workflow
-to actually execute; a triggered job just queues (silently, with nothing
-obviously broken) until a matching runner picks it up.
+during `config.sh`/`config.cmd`/`config.ps1`, add `kidemonitor-linux`,
+`kidemonitor-windows`, or `kidemonitor-macos` as appropriate — a distinct
+label per OS, matching each workflow's `runs-on`, rather than one shared
+label plus the OS as a separate label. If you run other self-hosted
+runners on the same physical machines for other repos (each repo needs
+its own runner registration and its own label even when it's literally
+the same hardware), those labels staying distinct per repo is what keeps
+a job from ever landing on the wrong project's runner. The runner needs
+to be running and online for a workflow to actually execute; a triggered
+job just queues (silently, with nothing obviously broken) until a
+matching runner picks it up.
+
+`runs-on` could instead reference a repo-level Actions variable (e.g.
+`runs-on: ${{ vars.RUNNER_WINDOWS }}`) rather than the label string
+directly — purely a style choice, not something GitHub Actions requires.
+The main reason to bother is template consistency across sibling repos:
+if every repo in a family defines the same variable names
+(`RUNNER_LINUX`/`RUNNER_MACOS`/`RUNNER_WINDOWS`) pointing at that repo's
+own labels, the workflow YAML itself can be identical/copy-pasted across
+all of them. This repo currently hardcodes the label directly instead,
+since nothing else here is templated across repos yet.
 
 **Why self-hosted runners are fine here, and when that would change**:
 self-hosted runners execute whatever a workflow file says, on your own

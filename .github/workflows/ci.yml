@@ -6,7 +6,7 @@ on:
 
 jobs:
   typecheck-and-build:
-    runs-on: [self-hosted, linux, kidemonitor]
+    runs-on: kidemonitor-linux
     steps:
       - uses: actions/checkout@v4
 

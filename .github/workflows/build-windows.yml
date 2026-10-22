@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, windows, kidemonitor]
+    runs-on: kidemonitor-windows
     strategy:
       matrix:
         app: [parent, child]
